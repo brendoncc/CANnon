@@ -25,13 +25,8 @@ SUBDIRS := \
 Core/Src \
 Core/Startup \
 Drivers/STM32G0xx_HAL_Driver/Src \
-Middlewares/ST/STM32_USBPD_Library/Core/src \
-Middlewares/ST/STM32_USBPD_Library/Devices/STM32G0XX/src \
 Middlewares/ST/STM32_USB_Device_Library/Class/CDC/Src \
 Middlewares/ST/STM32_USB_Device_Library/Core/Src \
-USBPD/App \
-USBPD/Target \
 USB_Device/App \
 USB_Device/Target \
-Utilities/TRACER_EMB \
 

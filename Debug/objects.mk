@@ -5,5 +5,5 @@
 
 USER_OBJS :=
 
-LIBS := -l:USBPDCORE_PD3_FULL_CM0PLUS_wc32.a
+LIBS :=
 

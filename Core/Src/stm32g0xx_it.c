@@ -20,8 +20,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "stm32g0xx_it.h"
-#include "usbpd.h"
-#include "tracer_emb.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -132,7 +130,8 @@ void SysTick_Handler(void)
 
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
-  USBPD_DPM_TimerCounter();
+  breathe_LED();
+
   /* USER CODE BEGIN SysTick_IRQn 1 */
 
   /* USER CODE END SysTick_IRQn 1 */
@@ -154,25 +153,9 @@ void USB_UCPD1_2_IRQHandler(void)
 
   /* USER CODE END USB_UCPD1_2_IRQn 0 */
   HAL_PCD_IRQHandler(&hpcd_USB_DRD_FS);
-  USBPD_PORT0_IRQHandler();
-
   /* USER CODE BEGIN USB_UCPD1_2_IRQn 1 */
 
   /* USER CODE END USB_UCPD1_2_IRQn 1 */
-}
-
-/**
-  * @brief This function handles DMA1 channel 1 interrupt.
-  */
-void DMA1_Channel1_IRQHandler(void)
-{
-  /* USER CODE BEGIN DMA1_Channel1_IRQn 0 */
-
-  /* USER CODE END DMA1_Channel1_IRQn 0 */
-
-  /* USER CODE BEGIN DMA1_Channel1_IRQn 1 */
-
-  /* USER CODE END DMA1_Channel1_IRQn 1 */
 }
 
 /**
@@ -183,7 +166,7 @@ void DMA1_Channel2_3_IRQHandler(void)
   /* USER CODE BEGIN DMA1_Channel2_3_IRQn 0 */
 
   /* USER CODE END DMA1_Channel2_3_IRQn 0 */
-  TRACER_EMB_IRQHandlerDMA();
+  HAL_DMA_IRQHandler(&hdma_usart2_tx);
   /* USER CODE BEGIN DMA1_Channel2_3_IRQn 1 */
 
   /* USER CODE END DMA1_Channel2_3_IRQn 1 */
@@ -197,7 +180,7 @@ void USART2_LPUART2_IRQHandler(void)
   /* USER CODE BEGIN USART2_LPUART2_IRQn 0 */
 
   /* USER CODE END USART2_LPUART2_IRQn 0 */
-  TRACER_EMB_IRQHandlerUSART();
+  HAL_UART_IRQHandler(&huart2);
   /* USER CODE BEGIN USART2_LPUART2_IRQn 1 */
 
   /* USER CODE END USART2_LPUART2_IRQn 1 */

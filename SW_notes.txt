@@ -6,4 +6,3 @@ Duty cycle
 
 Pulse = 0.5 * (ARR + 1) = 0.5 * (9 +1)
 
-

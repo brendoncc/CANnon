@@ -119,13 +119,7 @@ void HAL_PCD_MspDeInit(PCD_HandleTypeDef* pcdHandle)
     __HAL_RCC_USB_CLK_DISABLE();
 
     /* Peripheral interrupt Deinit*/
-  /* USER CODE BEGIN USB_DRD_FS:USB_UCPD1_2_IRQn disable */
-    /**
-    * Uncomment the line below to disable the "USB_UCPD1_2_IRQn" interrupt
-    * Be aware, disabling shared interrupt may affect other IPs
-    */
-    /* HAL_NVIC_DisableIRQ(USB_UCPD1_2_IRQn); */
-  /* USER CODE END USB_DRD_FS:USB_UCPD1_2_IRQn disable */
+    HAL_NVIC_DisableIRQ(USB_UCPD1_2_IRQn);
 
   /* USER CODE BEGIN USB_DRD_FS_MspDeInit 1 */
 
