@@ -1,20 +1,20 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2025 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -22,7 +22,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usbd_cdc_if.h"
+#include <usbd_cdc_if.h>
 
 /* USER CODE END Includes */
 
@@ -58,8 +58,9 @@ UART_HandleTypeDef huart4;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
-int LED_duty = 1;
-int LED_direction = 1;
+uint16_t LED_duty = 1;
+uint8_t LED_direction = 1;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -123,33 +124,27 @@ int main(void)
   MX_IWDG_Init();
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
-  HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
 
-  uint8_t buffer[] = "Hello, World!\r\n";
-  CDC_Transmit_FS(buffer, sizeof(buffer));
+  	//uint8_t buffer[] = "Hello, World!\r\n";
+    //CDC_Transmit_FS(buffer, sizeof(buffer));
 
-  // Calculate ticks for SysTick
-//  uint32_t period_ms = 1;
-//  uint32_t ticks = (HAL_RCC_GetHCLKFreq() / 1000) * period_ms;
-//  // Configure SysTick
-//  SysTick_Config(ticks);
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
+	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_4);
+
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-
-
-  while (1)
-  {
-	  HAL_IWDG_Refresh(&hiwdg);
+	while (1)
+	{
+		HAL_IWDG_Refresh(&hiwdg);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -621,29 +616,29 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 void breathe_LED(void)
 {
+	if(LED_direction == 1) //counting up
+	{
+		LED_duty++;
+	}
+	else if (LED_direction == 0)//counting down
+	{
+		LED_duty--;
+	}
+
+	if(LED_duty == 800)
+	{
+		LED_direction = 0;
+	}
+	else if (LED_duty == 1)
+	{
+		LED_direction = 1;
+	}
 	__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_2,LED_duty);
-		  	  __HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_3,LED_duty);
-		  	  __HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_4,LED_duty);
-
-		  	  if(LED_direction == 1) //counting up
-		  	  {
-		  		  LED_duty++;
-		  	  }
-		  	  else if (LED_direction == 0)//counting down
-		  	  {
-		  		  LED_duty--;
-		  	  }
-
-		  	  if(LED_duty == 800)
-		  	  {
-		  		  LED_direction = 0;
-		  	  }
-		  	  else if (LED_duty == 1)
-		  	  {
-		  		  LED_direction = 1;
-		  	  }
-
+	__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_3,LED_duty);
+	__HAL_TIM_SET_COMPARE(&htim4,TIM_CHANNEL_4,LED_duty);
 }
+
+
 /* USER CODE END 4 */
 
 /**
@@ -653,11 +648,11 @@ void breathe_LED(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
+	/* User can add his own implementation to report the HAL error return state */
+	__disable_irq();
+	while (1)
+	{
+	}
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -672,7 +667,7 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
+	/* User can add his own implementation to report the file name and line number,
      ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
