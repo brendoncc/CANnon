@@ -56,7 +56,6 @@ void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 void breathe_LED(void);
-
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/

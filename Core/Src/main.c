@@ -23,6 +23,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <usbd_cdc_if.h>
+#include "cli.h"
+#include "cli_defs.h"
+
 
 /* USER CODE END Includes */
 
@@ -125,8 +128,6 @@ int main(void)
   MX_USB_Device_Init();
   /* USER CODE BEGIN 2 */
 
-  	//uint8_t buffer[] = "Hello, World!\r\n";
-    //CDC_Transmit_FS(buffer, sizeof(buffer));
 
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_2);
 	HAL_TIM_PWM_Start(&htim4, TIM_CHANNEL_3);
