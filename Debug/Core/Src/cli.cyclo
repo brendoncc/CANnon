@@ -1,5 +1,5 @@
 ../Core/Src/cli.c:55:14:cli_init	1
 ../Core/Src/cli.c:71:14:cli_deinit	1
-../Core/Src/cli.c:79:14:cli_process	6
-../Core/Src/cli.c:120:14:cli_put	6
-../Core/Src/cli.c:152:13:cli_print	1
+../Core/Src/cli.c:79:14:cli_process	7
+../Core/Src/cli.c:127:14:cli_put	9
+../Core/Src/cli.c:166:13:cli_print	1

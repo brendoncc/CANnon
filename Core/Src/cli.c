@@ -42,7 +42,7 @@ static uint8_t cmd_buf[MAX_BUF_SIZE]; /* CLI command buffer */
 static volatile uint8_t cmd_pending;
 
 const char cli_prompt[] = ">> "; /* CLI prompt displayed to the user */
-const char cli_unrecog[] = "CMD: Command not recognised\r\n";
+const char cli_unrecog[] = "CMD: Command not recognised\r\n>> ";
 
 /*!
  * @brief This internal API prints a message to the user on the CLI.
@@ -94,23 +94,30 @@ cli_status_t cli_process(cli_t *cli)
 
 	/* Search the command table for a matching command, using argv[0]
 	 * which is the command name. */
-	for(size_t i = 0; i < cli->cmd_cnt; i++) {
-		if(strcmp(argv[0], cli->cmd_tbl[i].cmd) == 0) {
-			/* Found a match, execute the associated function. */
-			cli_status_t return_value = cli->cmd_tbl[i].func(argc, argv);
-			cli_print(cli, cli_prompt); /* Print the CLI prompt to the user. */
-			cmd_pending = 0;
-			return return_value;
+	if(argv[0] == NULL)
+	{
+		cli_print(cli, cli_prompt); /* Print the CLI prompt to the user. */
+		cmd_pending = 0;
+		return CLI_IDLE;
+	}
+	else
+	{
+		for(size_t i = 0; i < cli->cmd_cnt; i++) {
+			if(strcmp(argv[0], cli->cmd_tbl[i].cmd) == 0) {
+				/* Found a match, execute the associated function. */
+				cli_status_t return_value = cli->cmd_tbl[i].func(argc, argv);
+				cli_print(cli, cli_prompt); /* Print the CLI prompt to the user. */
+				cmd_pending = 0;
+				return return_value;
+			}
 		}
+		/* Command not found */
+		cli_print(cli, cli_unrecog);
+		cmd_pending = 0;
+		return CLI_E_CMD_NOT_FOUND;
 	}
 
-	/* Command not found */
-	cli_print(cli, cli_unrecog);
 
-	cli_print(cli, cli_prompt); /* Print the CLI prompt to the user. */
-
-	cmd_pending = 0;
-	return CLI_E_CMD_NOT_FOUND;
 }
 
 /*!
@@ -122,12 +129,19 @@ cli_status_t cli_put(cli_t *cli, char c)
 	switch(c) {
 	case CMD_TERMINATOR:
 
-		if(!cmd_pending) {
+		if(!cmd_pending)
+		{
 			*buf_ptr = '\0';      /* Terminate the msg and reset the msg ptr.      */
 			strcpy(cmd_buf, buf); /* Copy string to command buffer for processing. */
 			cmd_pending = 1;
 			buf_ptr = buf; /* Reset buf_ptr to beginning.                   */
 		}
+		break;
+
+	case '\x7F':
+		/* Backspace. Delete character. */
+		if(buf_ptr > buf)
+			buf_ptr--;
 		break;
 
 	case '\b':

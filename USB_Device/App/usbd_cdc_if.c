@@ -22,7 +22,7 @@
 #include "usbd_cdc_if.h"
 
 /* USER CODE BEGIN INCLUDE */
-
+#include "main.h"
 /* USER CODE END INCLUDE */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -261,9 +261,24 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 {
   /* USER CODE BEGIN 6 */
-  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
-  CDC_Transmit_FS(Buf, *Len);
+	  for (uint32_t i = 0; i < *Len; i++)
+	  {
+	    // If a Carriage Return (CR) is received, send both CR and LF
+	    if (Buf[i] == '\r')
+	    {
+	      uint8_t crlf[] = "\r\n"; // Or {0x0D, 0x0A}
+	      CDC_Transmit_FS(crlf, sizeof(crlf) - 1); // Transmit CR LF
+	    }
+	    else
+	    {
+	      CDC_Transmit_FS(&Buf[i], 1); // Echo the character back
+	    }
+	  }
+	  volatile char c = Buf[0];
+	  cli_rx(c);
+	  USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+	  USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
   return (USBD_OK);
   /* USER CODE END 6 */
 }
