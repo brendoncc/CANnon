@@ -85,6 +85,8 @@ static void MX_IWDG_Init(void);
 void cli_println(char *string);
 cli_status_t help_func(int argc, char **argv);
 cli_status_t echo_func(int argc, char **argv);
+cli_status_t CAN_PWR_func(int argc, char **argv);
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -93,25 +95,19 @@ cli_status_t echo_func(int argc, char **argv);
 cli_t cli;	//creates instance of the cli function?
 
 //table of commands and respective funtions
-cmd_t cmd_tbl[2] =
+cmd_t cmd_tbl[3] =
 {
-{ .cmd = "help", .func = help_func },
-{ .cmd = "echo", .func = echo_func } };
-
-void cli_println(char *string)
-{
-	CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
-	HAL_Delay(1); //debug only, small delay to test sequential transmissions
-}
-
-void cli_rx(char c)
-{
-	cli_put(&cli, c);
-}
+		{ .cmd = "help", .func = help_func },
+		{ .cmd = "echo", .func = echo_func },
+		{ .cmd = "CAN_power", .func = CAN_PWR_func }
+};
 
 cli_status_t help_func(int argc, char **argv)
 {
-	cli.println("HELP function executed \r\n");
+	cli.println("-- HAL CLI Commands -- \r\n");
+	cli.println("help \r\n");
+	cli.println("echo (1|0) \r\n");
+	cli.println("CAN_power (1|0) \r\n");
 	return CLI_OK;
 }
 
@@ -135,6 +131,38 @@ cli_status_t echo_func(int argc, char **argv)
 	return CLI_OK;
 }
 
+cli_status_t CAN_PWR_func(int argc, char **argv)
+{
+	if (argc > 0)
+	{
+		if (strcmp(argv[1], "1") == 0)
+		{
+			cli.println("CAN powered on \r\n");
+		}
+		else if (strcmp(argv[1], "0") == 0)
+		{
+			cli.println("CAN powered off \r\n");
+		}
+		else
+		{
+			cli.println("CAN_power invalid argument \r\n");
+			return CLI_E_INVALID_ARGS;
+		}
+	}
+
+	return CLI_OK;
+}
+void cli_println(char *string)
+{
+	CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
+	HAL_Delay(1); //debug only, small delay to test sequential transmissions
+}
+
+void cli_rx(char c)
+{
+	cli_put(&cli, c);
+}
+
 void breathe_LED(void)
 {
 	if (LED_direction == 1) //counting up
@@ -146,11 +174,11 @@ void breathe_LED(void)
 		LED_duty--;
 	}
 
-	if (LED_duty == 2400)	//
+	if (LED_duty == 1000)	//
 	{
 		LED_direction = 0;
 	}
-	else if (LED_duty == 100)
+	else if (LED_duty == 200)
 	{
 		LED_direction = 1;
 	}
@@ -707,11 +735,17 @@ static void MX_GPIO_Init(void)
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-	/*Configure GPIO pins : BLE_SPI_IRQ_Pin USR_BTN_Pin */
-	GPIO_InitStruct.Pin = BLE_SPI_IRQ_Pin | USR_BTN_Pin;
+	/*Configure GPIO pin : BLE_SPI_IRQ_Pin */
+	GPIO_InitStruct.Pin = BLE_SPI_IRQ_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	HAL_GPIO_Init(BLE_SPI_IRQ_GPIO_Port, &GPIO_InitStruct);
+
+	/*Configure GPIO pin : USR_BTN_Pin */
+	GPIO_InitStruct.Pin = USR_BTN_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(USR_BTN_GPIO_Port, &GPIO_InitStruct);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/* USER CODE END MX_GPIO_Init_2 */
