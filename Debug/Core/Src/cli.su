@@ -1,5 +1,5 @@
 ../Core/Src/cli.c:56:14:cli_init	16	static
-../Core/Src/cli.c:73:14:cli_deinit	16	static
-../Core/Src/cli.c:81:14:cli_process	168	static
-../Core/Src/cli.c:132:14:cli_put	16	static
-../Core/Src/cli.c:172:13:cli_print	80	static
+../Core/Src/cli.c:72:14:cli_deinit	16	static
+../Core/Src/cli.c:80:14:cli_process	168	static
+../Core/Src/cli.c:131:14:cli_put	16	static
+../Core/Src/cli.c:171:13:cli_print	80	static

@@ -25,7 +25,8 @@
 #include <usbd_cdc_if.h>
 #include "cli.h"
 #include "cli_defs.h"
-
+#include "hdc2021.h" // Include the HDC2021 driver header
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -66,7 +67,11 @@ DMA_HandleTypeDef hdma_usart2_tx;
 uint16_t LED_duty = 1;
 uint8_t LED_direction = 1;
 uint8_t connection_message_sent = 0;
+uint8_t button_pushed = 0;
 extern volatile uint8_t CDC_Connection_Open_Flag; // Declare the flag as external
+
+float temperature = 0.0f;
+float humidity = 0.0f;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -83,9 +88,11 @@ static void MX_USART4_UART_Init(void);
 static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
 void cli_println(char *string);
+void Read_Temp_Humid(void);
+
 cli_status_t help_func(int argc, char **argv);
 cli_status_t echo_func(int argc, char **argv);
-cli_status_t CAN_PWR_func(int argc, char **argv);
+cli_status_t can_pwr_func(int argc, char **argv);
 
 /* USER CODE END PFP */
 
@@ -95,57 +102,44 @@ cli_status_t CAN_PWR_func(int argc, char **argv);
 cli_t cli;	//creates instance of the cli function?
 
 //table of commands and respective funtions
-cmd_t cmd_tbl[3] =
+cmd_t cmd_tbl[2] =
 {
-		{ .cmd = "help", .func = help_func },
-		{ .cmd = "echo", .func = echo_func },
-		{ .cmd = "CAN_power", .func = CAN_PWR_func }
-};
+{ .cmd = "help", .func = help_func },
+{ .cmd = "can_power", .func = can_pwr_func } };
 
 cli_status_t help_func(int argc, char **argv)
 {
 	cli.println("-- HAL CLI Commands -- \r\n");
 	cli.println("help \r\n");
-	cli.println("echo (1|0) \r\n");
-	cli.println("CAN_power (1|0) \r\n");
+	cli.println("can_power [ 1 | 0 | -help ] \r\n");
 	return CLI_OK;
 }
 
-cli_status_t echo_func(int argc, char **argv)
+cli_status_t can_pwr_func(int argc, char **argv)
 {
 	if (argc > 0)
 	{
 		if (strcmp(argv[1], "-help") == 0)
 		{
-			cli.println("ECHO help menu \r\n");
+			cli.println("-- CAN Power help menu --\r\n");
+			cli.println("can_power 1	//Enable CAN isolated PSU \r\n");
+			cli.println("can_power 0	//Disabled CAN isolated PSU \r\n");
 		}
-		else
+		else if (strcmp(argv[1], "1") == 0)
 		{
-			return CLI_E_INVALID_ARGS;
-		}
-	}
-	else
-	{
-		cli.println("ECHO enabled");
-	}
-	return CLI_OK;
-}
-
-cli_status_t CAN_PWR_func(int argc, char **argv)
-{
-	if (argc > 0)
-	{
-		if (strcmp(argv[1], "1") == 0)
-		{
-			cli.println("CAN powered on \r\n");
+			cli.println("CAN power on \r\n");
+			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin,
+					GPIO_PIN_SET);
 		}
 		else if (strcmp(argv[1], "0") == 0)
 		{
-			cli.println("CAN powered off \r\n");
+			cli.println("CAN power off \r\n");
+			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin,
+					GPIO_PIN_RESET);
 		}
 		else
 		{
-			cli.println("CAN_power invalid argument \r\n");
+			cli.println("can_power invalid argument \r\n");
 			return CLI_E_INVALID_ARGS;
 		}
 	}
@@ -174,17 +168,36 @@ void breathe_LED(void)
 		LED_duty--;
 	}
 
-	if (LED_duty == 1000)	//
+	if (LED_duty == 2000)	//
 	{
 		LED_direction = 0;
 	}
-	else if (LED_duty == 200)
+	else if (LED_duty == 100)
 	{
 		LED_direction = 1;
 	}
 	__HAL_TIM_SET_COMPARE(&htim4, GRN_LED, LED_duty);
 	__HAL_TIM_SET_COMPARE(&htim4, RED_LED, LED_duty);
 	__HAL_TIM_SET_COMPARE(&htim4, BLU_LED, LED_duty);
+}
+
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
+{
+	if (GPIO_Pin == USR_BTN_Pin)
+	{
+		button_pushed = 1;
+	}
+}
+
+void Read_Temp_Humid(void)
+{
+	HDC2021_TriggerMeasurement(&hi2c2);
+	temperature = HDC2021_ReadTemperature(&hi2c2);
+	humidity = HDC2021_ReadHumidity(&hi2c2);
+
+	char msg[30];
+	sprintf(msg, "\r\nT: %.2fC, H: %.2f%%", temperature, humidity);
+	cli.println(msg);
 }
 /* USER CODE END 0 */
 
@@ -225,8 +238,8 @@ int main(void)
 	MX_SPI2_Init();
 	MX_TIM4_Init();
 	MX_USART4_UART_Init();
-	MX_IWDG_Init();
 	MX_USB_Device_Init();
+	MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
 
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Green LED
@@ -235,6 +248,9 @@ int main(void)
 	cli.println = cli_println;	//define function used for cli.println
 	cli.cmd_tbl = cmd_tbl;				//define name of array used for cmd_tbl
 	cli.cmd_cnt = sizeof(cmd_tbl) / sizeof(cmd_t);	//define number of commands
+
+	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT,
+			HDC2021_RATE_OFF);
 
 	/* USER CODE END 2 */
 
@@ -252,8 +268,15 @@ int main(void)
 				cli_init(&cli);	//initialize cli
 				connection_message_sent = 1; // Mark message as sent
 				HAL_TIM_PWM_Start(&htim4, RED_LED);	// Red LED
-				HAL_TIM_PWM_Stop(&htim4, GRN_LED);	// Red LED
+				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
 			}
+
+			if (button_pushed == 1)
+			{
+				Read_Temp_Humid();
+				button_pushed = 0;
+			}
+
 			cli_process(&cli);//periodically call to process incoming characters
 		}
 		else if (CDC_Connection_Open_Flag == 0)
@@ -421,9 +444,9 @@ static void MX_IWDG_Init(void)
 
 	/* USER CODE END IWDG_Init 1 */
 	hiwdg.Instance = IWDG;
-	hiwdg.Init.Prescaler = IWDG_PRESCALER_256;
+	hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
 	hiwdg.Init.Window = 4095;
-	hiwdg.Init.Reload = 125;
+	hiwdg.Init.Reload = 4095;
 	if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
 	{
 		Error_Handler();
@@ -743,9 +766,13 @@ static void MX_GPIO_Init(void)
 
 	/*Configure GPIO pin : USR_BTN_Pin */
 	GPIO_InitStruct.Pin = USR_BTN_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+	GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(USR_BTN_GPIO_Port, &GPIO_InitStruct);
+
+	/* EXTI interrupt init*/
+	HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);
+	HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/* USER CODE END MX_GPIO_Init_2 */

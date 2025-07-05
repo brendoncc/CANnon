@@ -1,4 +1,5 @@
 "./Core/Src/cli.o"
+"./Core/Src/hdc2021.o"
 "./Core/Src/main.o"
 "./Core/Src/stm32g0xx_hal_msp.o"
 "./Core/Src/stm32g0xx_it.o"

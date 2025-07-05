@@ -63,7 +63,6 @@ cli_status_t cli_init(cli_t *cli)
 	/* Print the CLI prompt. */
 	cli_print(cli, cli_init_message);
 	cli_print(cli, cli_prompt);
-
 	return CLI_OK;
 }
 

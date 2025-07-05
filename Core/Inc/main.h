@@ -66,6 +66,7 @@ void cli_rx(char c);
 #define BLE_SPI_IRQ_GPIO_Port GPIOB
 #define USR_BTN_Pin GPIO_PIN_14
 #define USR_BTN_GPIO_Port GPIOB
+#define USR_BTN_EXTI_IRQn EXTI4_15_IRQn
 #define CAN_PWR_CLK_Pin GPIO_PIN_3
 #define CAN_PWR_CLK_GPIO_Port GPIOB
 #define CAN_PWR_EN_Pin GPIO_PIN_4
