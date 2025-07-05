@@ -93,6 +93,7 @@ void Read_Temp_Humid(void);
 cli_status_t help_func(int argc, char **argv);
 cli_status_t echo_func(int argc, char **argv);
 cli_status_t can_pwr_func(int argc, char **argv);
+cli_status_t temp(int argc, char **argv);
 
 /* USER CODE END PFP */
 
@@ -102,16 +103,19 @@ cli_status_t can_pwr_func(int argc, char **argv);
 cli_t cli;	//creates instance of the cli function?
 
 //table of commands and respective funtions
-cmd_t cmd_tbl[2] =
+cmd_t cmd_tbl[3] =
 {
 { .cmd = "help", .func = help_func },
-{ .cmd = "can_power", .func = can_pwr_func } };
+{ .cmd = "can_power", .func = can_pwr_func },
+{ .cmd = "temp", .func = temp }
+};
 
 cli_status_t help_func(int argc, char **argv)
 {
 	cli.println("-- HAL CLI Commands -- \r\n");
 	cli.println("help \r\n");
 	cli.println("can_power [ 1 | 0 | -help ] \r\n");
+	cli.println("temp [ -read | -help ] \r\n");
 	return CLI_OK;
 }
 
@@ -146,6 +150,30 @@ cli_status_t can_pwr_func(int argc, char **argv)
 
 	return CLI_OK;
 }
+
+cli_status_t temp(int argc, char **argv)
+{
+	if (argc > 0)
+		{
+			if (strcmp(argv[1], "-help") == 0)
+			{
+				cli.println("-- Temperature Sensor help menu --\r\n");
+				cli.println("temp -read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
+			}
+			else if (strcmp(argv[1], "-read") == 0)
+			{
+				 Read_Temp_Humid();
+			}
+			else
+			{
+				cli.println("temp invalid argument \r\n");
+				return CLI_E_INVALID_ARGS;
+			}
+		}
+		return CLI_OK;
+}
+
+
 void cli_println(char *string)
 {
 	CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
@@ -196,7 +224,7 @@ void Read_Temp_Humid(void)
 	humidity = HDC2021_ReadHumidity(&hi2c2);
 
 	char msg[30];
-	sprintf(msg, "\r\nT: %.2fC, H: %.2f%%", temperature, humidity);
+	sprintf(msg, "T: %.2fC, H: %.2f%%\r\n", temperature, humidity);
 	cli.println(msg);
 }
 /* USER CODE END 0 */
