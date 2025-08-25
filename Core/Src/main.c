@@ -107,8 +107,7 @@ cmd_t cmd_tbl[3] =
 {
 { .cmd = "help", .func = help_func },
 { .cmd = "can_power", .func = can_pwr_func },
-{ .cmd = "temp", .func = temp }
-};
+{ .cmd = "temp", .func = temp } };
 
 cli_status_t help_func(int argc, char **argv)
 {
@@ -154,25 +153,25 @@ cli_status_t can_pwr_func(int argc, char **argv)
 cli_status_t temp(int argc, char **argv)
 {
 	if (argc > 0)
+	{
+		if (strcmp(argv[1], "-help") == 0)
 		{
-			if (strcmp(argv[1], "-help") == 0)
-			{
-				cli.println("-- Temperature Sensor help menu --\r\n");
-				cli.println("temp -read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
-			}
-			else if (strcmp(argv[1], "-read") == 0)
-			{
-				 Read_Temp_Humid();
-			}
-			else
-			{
-				cli.println("temp invalid argument \r\n");
-				return CLI_E_INVALID_ARGS;
-			}
+			cli.println("-- Temperature Sensor help menu --\r\n");
+			cli.println(
+					"temp -read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
 		}
-		return CLI_OK;
+		else if (strcmp(argv[1], "-read") == 0)
+		{
+			Read_Temp_Humid();
+		}
+		else
+		{
+			cli.println("temp invalid argument \r\n");
+			return CLI_E_INVALID_ARGS;
+		}
+	}
+	return CLI_OK;
 }
-
 
 void cli_println(char *string)
 {
