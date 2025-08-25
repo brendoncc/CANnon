@@ -91,7 +91,6 @@ void cli_println(char *string);
 void Read_Temp_Humid(void);
 
 cli_status_t help_func(int argc, char **argv);
-cli_status_t echo_func(int argc, char **argv);
 cli_status_t can_pwr_func(int argc, char **argv);
 cli_status_t temp(int argc, char **argv);
 
