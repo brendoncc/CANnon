@@ -1,7 +1,7 @@
-../Core/Src/hdc2021.c:26:19:HDC2021_ReadRegister	40	static
-../Core/Src/hdc2021.c:46:19:HDC2021_WriteRegister	32	static
-../Core/Src/hdc2021.c:70:19:HDC2021_Init	32	static
-../Core/Src/hdc2021.c:156:19:HDC2021_TriggerMeasurement	32	static
-../Core/Src/hdc2021.c:190:7:HDC2021_ReadTemperature	40	static
-../Core/Src/hdc2021.c:225:7:HDC2021_ReadHumidity	40	static
-../Core/Src/hdc2021.c:255:19:HDC2021_SoftReset	32	static
+../Core/Src/hdc2021.c:25:19:HDC2021_ReadRegister	40	static
+../Core/Src/hdc2021.c:47:19:HDC2021_WriteRegister	32	static
+../Core/Src/hdc2021.c:72:19:HDC2021_Init	32	static
+../Core/Src/hdc2021.c:160:19:HDC2021_TriggerMeasurement	32	static
+../Core/Src/hdc2021.c:196:7:HDC2021_ReadTemperature	40	static
+../Core/Src/hdc2021.c:233:7:HDC2021_ReadHumidity	40	static
+../Core/Src/hdc2021.c:265:19:HDC2021_SoftReset	32	static

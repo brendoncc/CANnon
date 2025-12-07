@@ -67,7 +67,7 @@ DMA_HandleTypeDef hdma_usart2_tx;
 uint16_t LED_duty = 1;
 uint8_t LED_direction = 1;
 uint8_t connection_message_sent = 0;
-uint8_t button_pushed = 0;
+volatile uint8_t button_pushed = 0;
 extern volatile uint8_t CDC_Connection_Open_Flag; // Declare the flag as external
 
 float temperature = 0.0f;
@@ -268,12 +268,11 @@ int main(void)
 	MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
 
-	HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Green LED
-	//HAL_TIM_PWM_Start(&htim4, BLU_LED);	// Blue LED
-
 	cli.println = cli_println;	//define function used for cli.println
 	cli.cmd_tbl = cmd_tbl;				//define name of array used for cmd_tbl
 	cli.cmd_cnt = sizeof(cmd_tbl) / sizeof(cmd_t);	//define number of commands
+
+	HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Green LED
 
 	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT,
 			HDC2021_RATE_OFF);
@@ -307,9 +306,14 @@ int main(void)
 		}
 		else if (CDC_Connection_Open_Flag == 0)
 		{
-			cli_deinit(&cli);
-			HAL_TIM_PWM_Stop(&htim4, RED_LED);	// Red LED
-			HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Red LED
+			if (connection_message_sent) // if connection was previously open
+			{
+				cli_deinit(&cli);
+				connection_message_sent = 0; // Mark state as disconnected/deinit
+				// State change: Red OFF, Green ON
+				HAL_TIM_PWM_Stop(&htim4, RED_LED);
+				HAL_TIM_PWM_Start(&htim4, GRN_LED);
+			}
 		}
 		/* USER CODE END WHILE */
 

@@ -71,6 +71,9 @@ cli_status_t cli_init(cli_t *cli)
  */
 cli_status_t cli_deinit(cli_t *cli)
 {
+	buf_ptr = buf; 	//Reset the buffer pointer to the start of the buffer.
+	cmd_pending = 0; //Clear any pending command flag.
+
 	return CLI_OK;
 }
 
@@ -165,14 +168,15 @@ cli_status_t cli_put(cli_t *cli, char c)
 	}
 }
 
-/*!
- * @brief Print a message on the command-line interface.
- */
 static void cli_print(cli_t *cli, const char *msg)
 {
-	/* Temp buffer to store text in ram first */
-	char buf[50];
-	strcpy(buf, msg);
-    //strcat(buf, "\r\n");
+	/* Temp buffer to store text in RAM first. Use MAX_BUF_SIZE for safety. */
+	// Ensure MAX_BUF_SIZE is defined in cli_defs.h
+	char buf[MAX_BUF_SIZE + 1]; // +1 for safety (string termination)
+
+	// Use strncpy to limit the copy operation, preventing overflow
+	strncpy(buf, msg, MAX_BUF_SIZE);
+	buf[MAX_BUF_SIZE] = '\0'; // Manually ensure null termination
+
 	cli->println(buf);
 }
