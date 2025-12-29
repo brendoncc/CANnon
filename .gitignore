@@ -1,0 +1,19 @@
+# STM32CubeIDE Build Artifacts
+Debug/
+Release/
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+
+# IDE specific (Eclipse/CubeIDE)
+.metadata/
+.settings/
+.cache/
+*.swp
+*.bak
+
+# Optional: Ignore Drivers if you want a tiny repo 
+# (But you'll need to re-generate code after cloning)
+# Drivers/STM32*
