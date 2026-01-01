@@ -1,8 +1,102 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CANnon STM32 Dashboard</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <style>
+        :root { --primary: #2ecc71; } 
+        body { padding-bottom: 3rem; }
+        .hero { 
+            padding: 3rem 0; 
+            text-align: center; 
+            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%); 
+            color: white; 
+            border-radius: 12px; 
+            margin: 2rem 0;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        .download-card { 
+            border: 2px solid var(--primary); 
+            padding: 2rem; 
+            border-radius: 12px; 
+            text-align: center;
+            background: rgba(46, 204, 113, 0.05);
+        }
+        .pdf-container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
 <body>
-  <h1>Project: CANnon STM32</h1>
-  <p>Status: Work in Progress</p>
-  <a href="https://github.com/brendoncc/CANnon>Back to Code</a>
+    <main class="container">
+        <header class="hero">
+            <h1>🚀 CANnon STM32</h1>
+            <p>STM32 board with UART passthrough, CAN FD, BLE</p>
+        </header>
+
+        <section>
+            <div class="grid">
+                <div>
+                    <h3>Overview</h3>
+                    <p>CANnon is a specialized controller platform featuring:</p>
+                    <ul>
+                        <li><strong>MCU:</strong> STM32G0B1CBT6</li>
+                        <li><strong>Connectivity:</strong> CAN FD & BLE Integration</li>
+                        <li><strong>Utility:</strong> UART Passthrough support</li>
+                    </ul>
+                </div>
+
+                <div class="download-card">
+                    <h4>Latest Firmware</h4>
+                    <p>Ready-to-flash binary (.bin)</p>
+                    <a href="https://github.com/brendoncc/CANnon/raw/main/firmware/Debug/CANnon_STM32.bin" class="button" download>
+                        Download CANnon.bin
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <hr>
+
+        <section id="schematic">
+            <h2>Hardware Schematic</h2>
+            <p>Review the electrical design directly below:</p>
+            <iframe src="./schematic.pdf" class="pdf-container">
+                This browser does not support PDFs. Please download the PDF to view it: 
+                <a href="./schematic.pdf">Download PDF</a>.
+            </iframe>
+        </section>
+
+        <section>
+            <h2>Project Resources</h2>
+            <div class="grid">
+                <article>
+                    <h5>Assembly Guide</h5>
+                    <a href="./ibom.html" class="outline" role="button">Interactive BOM</a>
+                </article>
+
+                <article>
+                    <h5>Source Code</h5>
+                    <a href="https://github.com/brendoncc/CANnon" class="outline" role="button">GitHub Repo</a>
+                </article>
+            </div>
+        </section>
+
+        <section>
+            <details>
+                <summary>View Technical Build Notes</summary>
+                <pre style="background: #f4f4f4; padding: 1rem; border-radius: 8px;">
+CANnon STM32 Hardware Notes:
+- Target: STM32G0B1CBTX
+                </pre>
+            </details>
+        </section>
+    </main>
 </body>
 </html>
