@@ -3,100 +3,117 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CANnon STM32 Dashboard</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@1/css/pico.min.css">
+    <title>CANnon | STM32 Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root { --primary: #2ecc71; } 
-        body { padding-bottom: 3rem; }
-        .hero { 
-            padding: 3rem 0; 
-            text-align: center; 
-            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%); 
-            color: white; 
-            border-radius: 12px; 
-            margin: 2rem 0;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        body { font-family: 'Helvetica', 'Arial', sans-serif; background-color: #f8fafc; color: #0f172a; }
+        .hero-gradient { background-color: #f0f2f5; }
+        /* Matching the PDF background to the section background */
+        .pdf-frame {
+            background-color: #1e293b; /* Slate-800 */
+            border: none;
         }
-        .download-card { 
-            border: 2px solid var(--primary); 
-            padding: 2rem; 
-            border-radius: 12px; 
-            text-align: center;
-            background: rgba(46, 204, 113, 0.05);
-        }
-        .pdf-container {
-            width: 100%;
-            height: 600px;
-            border: 1px solid #ccc;
-            border-radius: 8px;
-            margin-top: 1rem;
-        }
+        .card { transition: all 0.3s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
     </style>
 </head>
 <body>
-    <main class="container">
-        <header class="hero">
-            <h1>🚀 CANnon STM32</h1>
-            <p>STM32 board with UART passthrough, CAN FD, BLE</p>
-        </header>
 
-        <section>
-            <div class="grid">
-                <div>
-                    <h3>Overview</h3>
-                    <p>CANnon is a specialized controller platform featuring:</p>
-                    <ul>
-                        <li><strong>MCU:</strong> STM32G0B1CBT6</li>
-                        <li><strong>Connectivity:</strong> CAN FD & BLE Integration</li>
-                        <li><strong>Utility:</strong> UART Passthrough support</li>
-                    </ul>
+    <nav class="border-b border-gray-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+            <span class="text-lg font-bold tracking-tighter text-slate-900">CANnon</span>
+            <div class="flex items-center gap-6">
+                <a href="#docs" class="text-sm font-medium text-slate-600 hover:text-green-600">Hardware</a>
+                <a href="https://github.com/brendoncc/CANnon" class="text-sm font-medium text-slate-600 hover:text-green-600">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <header class="hero-gradient pt-16 pb-20 border-b border-gray-100 text-center">
+        <div class="max-w-5xl mx-auto px-6">
+            <h1 class="text-6xl font-black tracking-tight text-slate-900 mb-6">CANnon STM32</h1>
+            <p class="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
+				CANnon is a fully isolated USB-to-CAN FD bridge powered by the STM32G0B1. Optional BLE connectivity allows for wireless bus monitoring.
+            </p>
+            <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+                <a href="https://github.com/brendoncc/CANnon/raw/main/firmware/Debug/CANnon_STM32.bin" 
+                   class="inline-flex items-center justify-center px-8 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition shadow-lg shadow-slate-200">
+                    Download Firmware (.bin)
+                </a>
+                <a href="./ibom.html" 
+                   class="inline-flex items-center justify-center px-8 py-3 bg-white text-slate-900 border border-slate-200 font-bold rounded-xl hover:bg-slate-50 transition shadow-sm">
+                    Interactive BOM
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <section class="max-w-7xl mx-auto px-6 py-20">
+        <div class="flex items-center gap-4 mb-12">
+            <h2 class="text-3xl font-bold text-slate-900">System Specifications</h2>
+            <div class="h-px bg-slate-200 flex-grow"></div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 card shadow-sm text-center lg:text-left">
+                <p class="text-xs font-bold text-green-600 uppercase mb-1">Microcontroller</p>
+                <p class="text-lg font-bold text-slate-900 leading-tight">STM32G0B1CBT6</p>
+                <p class="text-sm text-slate-500 mt-2 italic">Cortex-M0+ @ 64MHz</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 card shadow-sm text-center lg:text-left">
+                <p class="text-xs font-bold text-green-600 uppercase mb-1">Wireless</p>
+                <p class="text-lg font-bold text-slate-900 leading-tight">BlueNRG-M0L</p>
+                <p class="text-sm text-slate-500 mt-2 italic">BLE v4.2 via SPI</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 card shadow-sm text-center lg:text-left">
+                <p class="text-xs font-bold text-green-600 uppercase mb-1">Isolated CAN</p>
+                <p class="text-lg font-bold text-slate-900 leading-tight">ISO1044BDR</p>
+                <p class="text-sm text-slate-500 mt-2 italic">Isolated CAN FD Transceiver</p>
+            </div>
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 card shadow-sm text-center lg:text-left">
+                <p class="text-xs font-bold text-green-600 uppercase mb-1">Power Control</p>
+                <p class="text-lg font-bold text-slate-900 leading-tight">TPS62932</p>
+                <p class="text-sm text-slate-500 mt-2 italic">Wide-VIN Buck Regulator</p>
+            </div>
+        </div>
+    </section>
+
+    <section id="docs" class="bg-slate-800 py-20">
+        <div class="max-w-[1400px] mx-auto px-6">
+            <div class="mb-12">
+                <h2 class="text-4xl font-bold text-white tracking-tight">Hardware Documentation</h2>
+                <p class="text-slate-400 mt-2 text-lg">HW Version V1.0</p>
+            </div>
+            
+            <div class="space-y-16">
+                <div class="overflow-hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="font-bold text-slate-200 text-xl">Schematic Design</span>
+                        <a href="./Schematic_CANnon_V1.0.pdf" target="_blank" class="text-sm font-bold text-slate-400 hover:text-white transition uppercase tracking-widest">Download PDF</a>
+                    </div>
+                    <iframe src="./Schematic_CANnon_V1.0.pdf" class="w-full h-[800px] rounded-2xl border-0 pdf-frame shadow-2xl"></iframe>
                 </div>
 
-                <div class="download-card">
-                    <h4>Latest Firmware</h4>
-                    <p>Ready-to-flash binary (.bin)</p>
-                    <a href="https://github.com/brendoncc/CANnon/raw/main/firmware/Debug/CANnon_STM32.bin" class="button" download>
-                        Download CANnon.bin
-                    </a>
+                <div class="overflow-hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="font-bold text-slate-200 text-xl">PCB Layout</span>
+                        <a href="./PCB_CANnon-V1.0.pdf" target="_blank" class="text-sm font-bold text-slate-400 hover:text-white transition uppercase tracking-widest">Download PDF</a>
+                    </div>
+                    <iframe src="./PCB_CANnon-V1.0.pdf" class="w-full h-[800px] rounded-2xl border-0 pdf-frame shadow-2xl"></iframe>
                 </div>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <hr>
-
-        <section id="schematic">
-            <h2>Hardware Schematic</h2>
-            <p>Review the electrical design directly below:</p>
-            <iframe src="./schematic.pdf" class="pdf-container">
-                This browser does not support PDFs. Please download the PDF to view it: 
-                <a href="./schematic.pdf">Download PDF</a>.
-            </iframe>
-        </section>
-
-        <section>
-            <h2>Project Resources</h2>
-            <div class="grid">
-                <article>
-                    <h5>Assembly Guide</h5>
-                    <a href="./ibom.html" class="outline" role="button">Interactive BOM</a>
-                </article>
-
-                <article>
-                    <h5>Source Code</h5>
-                    <a href="https://github.com/brendoncc/CANnon" class="outline" role="button">GitHub Repo</a>
-                </article>
+    <footer class="max-w-7xl mx-auto px-6 py-12">
+        <div class="flex flex-col md:flex-row justify-between items-center text-slate-400 text-xs uppercase tracking-[0.2em] font-bold">
+            <p>© 2026 brendoncc | CANnon Project</p>
+            <div class="flex gap-10 mt-6 md:mt-0">
+                <a href="https://github.com/brendoncc/CANnon" class="hover:text-slate-900 transition">GitHub</a>
+                <a href="#top" class="hover:text-slate-900 transition">Back to Top</a>
             </div>
-        </section>
+        </div>
+    </footer>
 
-        <section>
-            <details>
-                <summary>View Technical Build Notes</summary>
-                <pre style="background: #f4f4f4; padding: 1rem; border-radius: 8px;">
-CANnon STM32 Hardware Notes:
-- Target: STM32G0B1CBTX
-                </pre>
-            </details>
-        </section>
-    </main>
 </body>
 </html>
