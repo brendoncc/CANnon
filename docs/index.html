@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CANnon | STM32 Dashboard</title>
+    <title>CANNON | Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { font-family: 'Helvetica', 'Arial', sans-serif; background-color: #f8fafc; color: #0f172a; }
@@ -28,7 +28,7 @@
 
     <nav class="border-b border-gray-200 bg-white/80 backdrop-blur-md sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-            <span class="text-lg font-bold tracking-tighter text-slate-900">CANnon</span>
+            <span class="text-lg tracking-tighter text-slate-900"><span class="font-extrabold">CAN</span>NON</span>
             <div class="flex items-center gap-6">
                 <a href="#docs" class="text-sm font-medium text-slate-600 hover:text-green-600">Hardware</a>
                 <a href="https://github.com/brendoncc/CANnon" class="text-sm font-medium text-slate-600 hover:text-green-600">GitHub</a>
@@ -38,23 +38,22 @@
 
     <header class="hero-gradient pt-16 pb-20 border-b border-gray-100 text-center">
         <div class="max-w-5xl mx-auto px-6">
-            <h1 class="text-6xl font-black tracking-tight text-slate-900 mb-6">CANnon STM32</h1>
+            <h1 class="text-6xl tracking-tight text-slate-900 mb-6 uppercase">
+                <span class="font-black">CAN</span>NON
+            </h1>
             <p class="text-xl text-slate-600 max-w-2xl mx-auto leading-relaxed">
 				CANnon is a fully isolated USB-to-CAN FD bridge powered by the STM32G0B1. Optional BLE connectivity allows for wireless bus monitoring.
             </p>
-            <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4">
-                <a href="https://github.com/brendoncc/CANnon/raw/main/firmware/Debug/CANnon_STM32.bin" 
-                   class="inline-flex items-center justify-center px-8 py-3 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition shadow-lg shadow-slate-200">
-                    Download Firmware (.bin)
-                </a>
-                <a href="./ibom.html" 
-                   class="inline-flex items-center justify-center px-8 py-3 bg-white text-slate-900 border border-slate-200 font-bold rounded-xl hover:bg-slate-50 transition shadow-sm">
-                    Interactive BOM
-                </a>
-            </div>
         </div>
     </header>
-
+	
+    <section class="max-w-7xl mx-auto px-6 pt-20">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center justify-items-center">
+            <img src="./PCB_Top.png" alt="PCB Top View" class="w-full h-auto max-w-lg">
+            <img src="./PCB_Bottom.png" alt="PCB Bottom View" class="w-full h-auto max-w-lg">
+        </div>
+    </section>
+	
     <section class="max-w-7xl mx-auto px-6 py-20">
         <div class="flex items-center gap-4 mb-12">
             <h2 class="text-3xl font-bold text-slate-900">Technical Specifications</h2>
@@ -128,7 +127,7 @@
 
     <footer class="max-w-7xl mx-auto px-6 py-12">
         <div class="flex flex-col md:flex-row justify-between items-center text-slate-400 text-xs uppercase tracking-[0.2em] font-bold">
-            <p>© 2026 brendoncc | CANnon Project</p>
+            <p>© 2026 brendoncc | CANNON Project</p>
             <div class="flex gap-10 mt-6 md:mt-0">
                 <a href="https://github.com/brendoncc/CANnon" class="hover:text-slate-900 transition">GitHub</a>
                 <a href="#top" class="hover:text-slate-900 transition">Back to Top</a>
