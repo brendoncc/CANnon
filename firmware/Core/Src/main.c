@@ -89,6 +89,9 @@ static void MX_IWDG_Init(void);
 void cli_println(char *string);
 void Read_Temp_Humid(void);
 
+HAL_StatusTypeDef FDCAN_SetMode(uint32_t mode);
+HAL_StatusTypeDef CAN_SendMessage(uint32_t id, uint8_t *data, uint32_t len);
+
 cli_status_t help_func(int argc, char **argv);
 cli_status_t can_pwr_func(int argc, char **argv);
 cli_status_t temp_func(int argc, char **argv);
@@ -135,14 +138,12 @@ cli_status_t can_pwr_func(int argc, char **argv)
 		else if (strcmp(argv[1], "1") == 0)
 		{
 			cli.println("CAN power on \r\n");
-			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin,
-					GPIO_PIN_SET);
+			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
 		}
 		else if (strcmp(argv[1], "0") == 0)
 		{
 			cli.println("CAN power off \r\n");
-			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin,
-					GPIO_PIN_RESET);
+			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_RESET);
 		}
 		else
 		{
@@ -160,8 +161,7 @@ cli_status_t temp_func(int argc, char **argv)
 		if (strcmp(argv[1], "-help") == 0)
 		{
 			cli.println("-- Temperature Sensor help menu --\r\n");
-			cli.println(
-					"temp -read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
+			cli.println("temp -read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
 		}
 		else if (strcmp(argv[1], "-read") == 0)
 		{
@@ -178,57 +178,35 @@ cli_status_t temp_func(int argc, char **argv)
 
 cli_status_t can_test_func(int argc, char **argv)
 {
-
 	if (argc > 0)
 	{
 		if (strcmp(argv[1], "-help") == 0)
 		{
 			cli.println("-- CAN Test help menu --\r\n");
-			cli.println(
-					"can_test -start	//Start external CAN loopback test \r\n");
+			cli.println("can_test -start	//Start external CAN loopback test \r\n");
 			cli.println("		//DISCONNECT FROM BUS BEFORE RUNNING \r\n");
 		}
 		else if (strcmp(argv[1], "-start") == 0)
 		{
-			FDCAN_TxHeaderTypeDef TxHeader;
-			uint8_t TxData[] =
-			{ 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0x44, 0x01, 0x00 };
+			uint8_t testData[] =
+			{ 0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x86, 0x77 };
 
-			// 1. Start FDCAN if not already started
-			HAL_FDCAN_Stop(&hfdcan1);
-			hfdcan1.Init.Mode = FDCAN_MODE_EXTERNAL_LOOPBACK;
+			if (HAL_GPIO_ReadPin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin) == GPIO_PIN_RESET)
+			{
+				cli.println("Error: CAN Power is OFF. Run 'can_power 1' first.\r\n");
+				return CLI_E_IO;
+			}
 
-			if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+			if (FDCAN_SetMode(FDCAN_MODE_EXTERNAL_LOOPBACK) != HAL_OK)
 			{
 				return CLI_E_IO;
 			}
 
-			// NEW: Tell the hardware to trigger an interrupt when a new message hits RX FIFO 0
-			if (HAL_FDCAN_ActivateNotification(&hfdcan1,
-			FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
-			{
-				return CLI_E_IO;
-			}
-
-			// 2. Prepare Header
-			TxHeader.Identifier = 0x123;
-			TxHeader.IdType = FDCAN_STANDARD_ID;
-			TxHeader.TxFrameType = FDCAN_DATA_FRAME;
-			TxHeader.DataLength = FDCAN_DLC_BYTES_8;
-			TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-			TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
-			TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
-			TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-			TxHeader.MessageMarker = 0;
-
-			// 3. Send Message
-			if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData)
-					!= HAL_OK)
+			if (CAN_SendMessage(0x123, testData, 8) != HAL_OK)
 			{
 				cli.println("CAN TX Failed\r\n");
 				return CLI_E_IO;
 			}
-
 			cli.println("External CAN Loopback Frame Sent (ID 0x123)\r\n");
 		}
 		else
@@ -249,21 +227,19 @@ cli_status_t can_monitor_func(int argc, char **argv)
 		if (strcmp(argv[1], "-help") == 0)
 		{
 			cli.println("-- CAN Monitor help menu --\r\n");
-			cli.println(
-					"can_monitor -start	//Start continuous CAN monitoring \r\n");
+			cli.println("can_monitor -start	//Start continuous CAN monitoring \r\n");
 		}
 		else if (strcmp(argv[1], "-start") == 0)
 		{
-			cli.println("Entering Bus Monitor Mode (Listen Only)...\r\n");
-			HAL_FDCAN_Stop(&hfdcan1);
-			hfdcan1.Init.Mode = FDCAN_MODE_BUS_MONITORING;
-
-			if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+			if (HAL_GPIO_ReadPin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin) == GPIO_PIN_RESET)
 			{
+				cli.println("Error: CAN Power is OFF. Run 'can_power 1' first.\r\n");
 				return CLI_E_IO;
 			}
-			if (HAL_FDCAN_ActivateNotification(&hfdcan1,
-			FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+
+			cli.println("Entering Bus Monitor Mode (Listen Only)...\r\n");
+
+			if (FDCAN_SetMode(FDCAN_MODE_BUS_MONITORING) != HAL_OK)
 			{
 				return CLI_E_IO;
 			}
@@ -303,7 +279,7 @@ void breathe_LED(void)
 	{
 		LED_direction = 0;
 	}
-	else if (LED_duty == 100)
+	else if (LED_duty == 10)
 	{
 		LED_direction = 1;
 	}
@@ -327,6 +303,46 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 		/* Set our flag so main() knows something happened */
 		can_rx_flag = 1;
 	}
+}
+
+HAL_StatusTypeDef FDCAN_SetMode(uint32_t mode)
+{
+	HAL_FDCAN_Stop(&hfdcan1);
+	hfdcan1.State = HAL_FDCAN_STATE_RESET;
+	hfdcan1.Init.Mode = mode;
+
+	if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+	{
+		return HAL_ERROR;
+	}
+	if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+	{
+		return HAL_ERROR;
+	}
+	if (HAL_FDCAN_ActivateNotification(&hfdcan1,
+	FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+	{
+		return HAL_ERROR;
+	}
+	return HAL_OK;
+}
+
+HAL_StatusTypeDef CAN_SendMessage(uint32_t id, uint8_t *data, uint32_t len)
+{
+	FDCAN_TxHeaderTypeDef TxHeader;
+
+	// Configure common header settings
+	TxHeader.Identifier = id;
+	TxHeader.IdType = FDCAN_STANDARD_ID;
+	TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+	TxHeader.DataLength = FDCAN_DLC_BYTES_8; // Simplistic DLC conversion
+	TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+	TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+	TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
+	TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+	TxHeader.MessageMarker = 0;
+
+	return HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, data);
 }
 
 void Read_Temp_Humid(void)
@@ -387,8 +403,7 @@ int main(void)
 
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Green LED
 
-	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT,
-			HDC2021_RATE_OFF);
+	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
 
 	/* USER CODE END 2 */
 
@@ -421,11 +436,9 @@ int main(void)
 				uint8_t RxData[8];
 				char msg[128];
 
-				if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader,
-						RxData) == HAL_OK)
+				if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
 				{
-					int len = sprintf(msg, "RX ID: 0x%03lX [%ld] Data: ",
-							RxHeader.Identifier, RxHeader.DataLength >> 16);
+					int len = sprintf(msg, "RX ID: 0x%03lX [%ld] Data: ", RxHeader.Identifier, RxHeader.DataLength >> 16);
 
 					for (int i = 0; i < 8; i++)
 					{
@@ -442,7 +455,7 @@ int main(void)
 
 				can_rx_flag = 0;
 			}
-			cli_process(&cli);//periodically call to process incoming characters
+			cli_process(&cli);	//periodically call to process incoming characters
 		}
 		else if (CDC_Connection_Open_Flag == 0)
 		{
@@ -479,8 +492,7 @@ void SystemClock_Config(void)
 	/** Initializes the RCC Oscillators according to the specified parameters
 	 * in the RCC_OscInitTypeDef structure.
 	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI
-			| RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_HSI48;
+	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI | RCC_OSCILLATORTYPE_LSI | RCC_OSCILLATORTYPE_HSI48;
 	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
 	RCC_OscInitStruct.HSI48State = RCC_HSI48_ON;
 	RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
@@ -494,8 +506,7 @@ void SystemClock_Config(void)
 
 	/** Initializes the CPU, AHB and APB buses clocks
 	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-			| RCC_CLOCKTYPE_PCLK1;
+	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1;
 	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
 	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
 	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -524,7 +535,7 @@ static void MX_FDCAN1_Init(void)
 	hfdcan1.Instance = FDCAN1;
 	hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
 	hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
-	hfdcan1.Init.Mode = FDCAN_MODE_EXTERNAL_LOOPBACK;
+	hfdcan1.Init.Mode = FDCAN_MODE_BUS_MONITORING;
 	hfdcan1.Init.AutoRetransmission = DISABLE;
 	hfdcan1.Init.TransmitPause = DISABLE;
 	hfdcan1.Init.ProtocolException = DISABLE;
@@ -828,13 +839,11 @@ static void MX_USART2_UART_Init(void)
 	{
 		Error_Handler();
 	}
-	if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8)
-			!= HAL_OK)
+	if (HAL_UARTEx_SetTxFifoThreshold(&huart2, UART_TXFIFO_THRESHOLD_1_8) != HAL_OK)
 	{
 		Error_Handler();
 	}
-	if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8)
-			!= HAL_OK)
+	if (HAL_UARTEx_SetRxFifoThreshold(&huart2, UART_RXFIFO_THRESHOLD_1_8) != HAL_OK)
 	{
 		Error_Handler();
 	}
