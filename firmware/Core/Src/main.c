@@ -25,21 +25,20 @@
 #include <usbd_cdc_if.h>
 #include "cli.h"
 #include "cli_defs.h"
-#include "hdc2021.h" // Include the HDC2021 driver header
+#include "hdc2021.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-#define GRN_LED TIM_CHANNEL_2
-#define RED_LED TIM_CHANNEL_3
-#define BLU_LED TIM_CHANNEL_4
 
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define GRN_LED TIM_CHANNEL_2
+#define RED_LED TIM_CHANNEL_3
+#define BLU_LED TIM_CHANNEL_4
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -67,11 +66,11 @@ DMA_HandleTypeDef hdma_usart2_tx;
 uint16_t LED_duty = 1;
 uint8_t LED_direction = 1;
 uint8_t connection_message_sent = 0;
+extern volatile uint8_t CDC_Connection_Open_Flag;
 volatile uint8_t button_pushed = 0;
-extern volatile uint8_t CDC_Connection_Open_Flag; // Declare the flag as external
-
 float temperature = 0.0f;
 float humidity = 0.0f;
+volatile uint8_t can_rx_flag = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -92,28 +91,34 @@ void Read_Temp_Humid(void);
 
 cli_status_t help_func(int argc, char **argv);
 cli_status_t can_pwr_func(int argc, char **argv);
-cli_status_t temp(int argc, char **argv);
+cli_status_t temp_func(int argc, char **argv);
+cli_status_t can_test_func(int argc, char **argv);
+cli_status_t can_monitor_func(int argc, char **argv);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-cli_t cli;	//creates instance of the cli function?
+cli_t cli;	//creates instance of the CLI function
 
-//table of commands and respective funtions
-cmd_t cmd_tbl[3] =
+//table of commands and respective functions
+cmd_t cmd_tbl[5] =
 {
 { .cmd = "help", .func = help_func },
 { .cmd = "can_power", .func = can_pwr_func },
-{ .cmd = "temp", .func = temp } };
+{ .cmd = "temp", .func = temp_func },
+{ .cmd = "can_test", .func = can_test_func },
+{ .cmd = "can_monitor", .func = can_monitor_func } };
 
 cli_status_t help_func(int argc, char **argv)
 {
 	cli.println("-- HAL CLI Commands -- \r\n");
 	cli.println("help \r\n");
-	cli.println("can_power [ 1 | 0 | -help ] \r\n");
-	cli.println("temp [ -read | -help ] \r\n");
+	cli.println("can_power 	[ 1 | 0 | -help ] \r\n");
+	cli.println("can_test 	[ -start | -help ] \r\n");
+	cli.println("can_monitor 	[ -start | -help ] \r\n");
+	cli.println("temp 		[ -read | -help ] \r\n");
 	return CLI_OK;
 }
 
@@ -145,11 +150,10 @@ cli_status_t can_pwr_func(int argc, char **argv)
 			return CLI_E_INVALID_ARGS;
 		}
 	}
-
 	return CLI_OK;
 }
 
-cli_status_t temp(int argc, char **argv)
+cli_status_t temp_func(int argc, char **argv)
 {
 	if (argc > 0)
 	{
@@ -166,6 +170,107 @@ cli_status_t temp(int argc, char **argv)
 		else
 		{
 			cli.println("temp invalid argument \r\n");
+			return CLI_E_INVALID_ARGS;
+		}
+	}
+	return CLI_OK;
+}
+
+cli_status_t can_test_func(int argc, char **argv)
+{
+
+	if (argc > 0)
+	{
+		if (strcmp(argv[1], "-help") == 0)
+		{
+			cli.println("-- CAN Test help menu --\r\n");
+			cli.println(
+					"can_test -start	//Start external CAN loopback test \r\n");
+			cli.println("		//DISCONNECT FROM BUS BEFORE RUNNING \r\n");
+		}
+		else if (strcmp(argv[1], "-start") == 0)
+		{
+			FDCAN_TxHeaderTypeDef TxHeader;
+			uint8_t TxData[] =
+			{ 0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0x44, 0x01, 0x00 };
+
+			// 1. Start FDCAN if not already started
+			HAL_FDCAN_Stop(&hfdcan1);
+			hfdcan1.Init.Mode = FDCAN_MODE_EXTERNAL_LOOPBACK;
+
+			if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+			{
+				return CLI_E_IO;
+			}
+
+			// NEW: Tell the hardware to trigger an interrupt when a new message hits RX FIFO 0
+			if (HAL_FDCAN_ActivateNotification(&hfdcan1,
+			FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+			{
+				return CLI_E_IO;
+			}
+
+			// 2. Prepare Header
+			TxHeader.Identifier = 0x123;
+			TxHeader.IdType = FDCAN_STANDARD_ID;
+			TxHeader.TxFrameType = FDCAN_DATA_FRAME;
+			TxHeader.DataLength = FDCAN_DLC_BYTES_8;
+			TxHeader.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+			TxHeader.BitRateSwitch = FDCAN_BRS_OFF;
+			TxHeader.FDFormat = FDCAN_CLASSIC_CAN;
+			TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+			TxHeader.MessageMarker = 0;
+
+			// 3. Send Message
+			if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, TxData)
+					!= HAL_OK)
+			{
+				cli.println("CAN TX Failed\r\n");
+				return CLI_E_IO;
+			}
+
+			cli.println("External CAN Loopback Frame Sent (ID 0x123)\r\n");
+		}
+		else
+		{
+			cli.println("can_test invalid argument \r\n");
+			return CLI_E_INVALID_ARGS;
+		}
+	}
+
+	return CLI_OK;
+}
+
+cli_status_t can_monitor_func(int argc, char **argv)
+{
+
+	if (argc > 0)
+	{
+		if (strcmp(argv[1], "-help") == 0)
+		{
+			cli.println("-- CAN Monitor help menu --\r\n");
+			cli.println(
+					"can_monitor -start	//Start continuous CAN monitoring \r\n");
+		}
+		else if (strcmp(argv[1], "-start") == 0)
+		{
+			cli.println("Entering Bus Monitor Mode (Listen Only)...\r\n");
+			HAL_FDCAN_Stop(&hfdcan1);
+			hfdcan1.Init.Mode = FDCAN_MODE_BUS_MONITORING;
+
+			if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK)
+			{
+				return CLI_E_IO;
+			}
+			if (HAL_FDCAN_ActivateNotification(&hfdcan1,
+			FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+			{
+				return CLI_E_IO;
+			}
+		}
+		else
+		{
+			cli.println("can_monitor invalid argument \r\n");
 			return CLI_E_INVALID_ARGS;
 		}
 	}
@@ -194,7 +299,7 @@ void breathe_LED(void)
 		LED_duty--;
 	}
 
-	if (LED_duty == 2000)	//
+	if (LED_duty == 2000)
 	{
 		LED_direction = 0;
 	}
@@ -212,6 +317,15 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 	if (GPIO_Pin == USR_BTN_Pin)
 	{
 		button_pushed = 1;
+	}
+}
+
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+	if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
+	{
+		/* Set our flag so main() knows something happened */
+		can_rx_flag = 1;
 	}
 }
 
@@ -267,9 +381,8 @@ int main(void)
 	MX_USB_Device_Init();
 	MX_IWDG_Init();
 	/* USER CODE BEGIN 2 */
-
 	cli.println = cli_println;	//define function used for cli.println
-	cli.cmd_tbl = cmd_tbl;				//define name of array used for cmd_tbl
+	cli.cmd_tbl = cmd_tbl;			//define name of array used for cmd_tbl
 	cli.cmd_cnt = sizeof(cmd_tbl) / sizeof(cmd_t);	//define number of commands
 
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Green LED
@@ -302,6 +415,33 @@ int main(void)
 				button_pushed = 0;
 			}
 
+			if (can_rx_flag)
+			{
+				FDCAN_RxHeaderTypeDef RxHeader;
+				uint8_t RxData[8];
+				char msg[128];
+
+				if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader,
+						RxData) == HAL_OK)
+				{
+					int len = sprintf(msg, "RX ID: 0x%03lX [%ld] Data: ",
+							RxHeader.Identifier, RxHeader.DataLength >> 16);
+
+					for (int i = 0; i < 8; i++)
+					{
+						len += sprintf(msg + len, "%02X ", RxData[i]);
+					}
+					strcat(msg, "\r\n");
+					cli.println(msg);
+				}
+				else
+				{
+					// If this prints, Device B sees the traffic but it's "corrupt"
+					cli.println("RX Message Error\r\n");
+				}
+
+				can_rx_flag = 0;
+			}
 			cli_process(&cli);//periodically call to process incoming characters
 		}
 		else if (CDC_Connection_Open_Flag == 0)
@@ -309,8 +449,7 @@ int main(void)
 			if (connection_message_sent) // if connection was previously open
 			{
 				cli_deinit(&cli);
-				connection_message_sent = 0; // Mark state as disconnected/deinit
-				// State change: Red OFF, Green ON
+				connection_message_sent = 0; //Mark state as disconnected/deinit
 				HAL_TIM_PWM_Stop(&htim4, RED_LED);
 				HAL_TIM_PWM_Start(&htim4, GRN_LED);
 			}
@@ -385,13 +524,13 @@ static void MX_FDCAN1_Init(void)
 	hfdcan1.Instance = FDCAN1;
 	hfdcan1.Init.ClockDivider = FDCAN_CLOCK_DIV1;
 	hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
-	hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+	hfdcan1.Init.Mode = FDCAN_MODE_EXTERNAL_LOOPBACK;
 	hfdcan1.Init.AutoRetransmission = DISABLE;
 	hfdcan1.Init.TransmitPause = DISABLE;
 	hfdcan1.Init.ProtocolException = DISABLE;
-	hfdcan1.Init.NominalPrescaler = 16;
+	hfdcan1.Init.NominalPrescaler = 2;
 	hfdcan1.Init.NominalSyncJumpWidth = 1;
-	hfdcan1.Init.NominalTimeSeg1 = 2;
+	hfdcan1.Init.NominalTimeSeg1 = 13;
 	hfdcan1.Init.NominalTimeSeg2 = 2;
 	hfdcan1.Init.DataPrescaler = 1;
 	hfdcan1.Init.DataSyncJumpWidth = 1;

@@ -17,3 +17,5 @@ Release/
 # Optional: Ignore Drivers if you want a tiny repo 
 # (But you'll need to re-generate code after cloning)
 # Drivers/STM32*
+firmware/CANnon_STM32 Debug.launch
+firmware/.mxproject
