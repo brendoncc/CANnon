@@ -29,6 +29,8 @@ extern "C" {
 /* Includes ------------------------------------------------------------------*/
 #include "stm32g0xx_hal.h"
 
+#include "hci_tl_interface.h"
+#include "custom.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -62,8 +64,11 @@ void cli_rx(char c);
 /* Private defines -----------------------------------------------------------*/
 #define BLE_RESET_Pin GPIO_PIN_1
 #define BLE_RESET_GPIO_Port GPIOB
+#define BLE_SPI_CS_Pin GPIO_PIN_12
+#define BLE_SPI_CS_GPIO_Port GPIOB
 #define BLE_SPI_IRQ_Pin GPIO_PIN_13
 #define BLE_SPI_IRQ_GPIO_Port GPIOB
+#define BLE_SPI_IRQ_EXTI_IRQn EXTI4_15_IRQn
 #define USR_BTN_Pin GPIO_PIN_14
 #define USR_BTN_GPIO_Port GPIOB
 #define USR_BTN_EXTI_IRQn EXTI4_15_IRQn

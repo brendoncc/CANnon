@@ -31,7 +31,7 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-volatile uint8_t CDC_Connection_Open_Flag = 0;
+volatile uint8_t cdc_connection_open_flag = 0;
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -233,11 +233,11 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t* pbuf, uint16_t length)
 
 		if (req->wValue & 0x0001) // Check DTR bit (Bit 0 of wValue)
 		{
-			CDC_Connection_Open_Flag = 1; // DTR is asserted, connection opened
+			cdc_connection_open_flag = 1; // DTR is asserted, connection opened
 		}
 		else
 		{
-			CDC_Connection_Open_Flag = 0; // DTR is de-asserted, connection closed
+			cdc_connection_open_flag = 0; // DTR is de-asserted, connection closed
 		}
 
 		break;
