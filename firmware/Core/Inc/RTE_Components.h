@@ -23,7 +23,6 @@
 
 /* Defines ------------------------------------------------------------------*/
 /* STMicroelectronics.X-CUBE-BLE1.7.1.0 */
-#define VIRTUAL_COM_PORT
 #define HCI_TL
 #define HCI_TL_INTERFACE
 
