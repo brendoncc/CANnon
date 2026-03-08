@@ -27,6 +27,9 @@
 #include "cli_defs.h"
 #include "hdc2021.h"
 #include <stdio.h>
+#include "hci.h"
+#include "hci_tl.h"
+#include "bluenrg_utils.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -390,7 +393,7 @@ int main(void)
   MX_TIM4_Init();
   MX_USART4_UART_Init();
   MX_USB_Device_Init();
-  MX_IWDG_Init();
+  //MX_IWDG_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 	cli.println = cli_println;	//define function used for cli.println
@@ -400,6 +403,29 @@ int main(void)
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);	// Green LED
 
 	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
+
+
+	cli.println("Starting BLE Boot sequence...\r\n");
+
+	  /* 1. Initialize the HCI Transport Layer (This auto-initializes the SPI bus!) */
+	  hci_init(NULL, NULL);
+
+	  /* 2. Test the SPI connection by asking for the module's version */
+	  uint8_t hwVersion = 0;
+	  uint16_t fwVersion = 0;
+
+	  if (getBlueNRGVersion(&hwVersion, &fwVersion) == BLE_UTIL_SUCCESS)
+	  {
+	      /* SUCCESS! Place a breakpoint on the line below */
+	      char msg[64];
+	      sprintf(msg, "BlueNRG Booted! HW: %d, FW: %d\r\n", hwVersion, fwVersion);
+	      cli.println(msg);
+	  }
+	  else
+	  {
+	      /* SPI Handshake Failed */
+	      cli.println("BlueNRG Boot Failed.\r\n");
+	  }
 
   /* USER CODE END 2 */
 
@@ -898,7 +924,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_Init(USR_BTN_GPIO_Port, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI4_15_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(EXTI4_15_IRQn, 3, 0);
   HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */

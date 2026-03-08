@@ -92,13 +92,19 @@ int32_t HCI_TL_SPI_DeInit(void)
  */
 int32_t HCI_TL_SPI_Reset(void)
 {
-  // Deselect CS PIN for BlueNRG to avoid spurious commands
-  HAL_GPIO_WritePin(HCI_TL_SPI_CS_PORT, HCI_TL_SPI_CS_PIN, GPIO_PIN_SET);
+  /* 1. Pull CS LOW to force SPI mode on boot */
+  HAL_GPIO_WritePin(HCI_TL_SPI_CS_PORT, HCI_TL_SPI_CS_PIN, GPIO_PIN_RESET);
+  HAL_Delay(5);
 
+  /* 2. Toggle the Reset Pin */
   HAL_GPIO_WritePin(HCI_TL_RST_PORT, HCI_TL_RST_PIN, GPIO_PIN_RESET);
   HAL_Delay(5);
   HAL_GPIO_WritePin(HCI_TL_RST_PORT, HCI_TL_RST_PIN, GPIO_PIN_SET);
   HAL_Delay(5);
+
+  /* 3. Release CS to finish SPI selection */
+  HAL_GPIO_WritePin(HCI_TL_SPI_CS_PORT, HCI_TL_SPI_CS_PIN, GPIO_PIN_SET);
+
   return 0;
 }
 
@@ -230,7 +236,7 @@ void hci_tl_lowlevel_init(void)
   /* USER CODE BEGIN hci_tl_lowlevel_init 1 */
 
   /* USER CODE END hci_tl_lowlevel_init 1 */
-  tHciIO fops;
+  static tHciIO fops;
 
   /* Register IO bus services */
   fops.Init    = HCI_TL_SPI_Init;

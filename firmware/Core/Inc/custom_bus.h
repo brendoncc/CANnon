@@ -67,7 +67,7 @@
 #endif
 /* SPI2 Baud rate in bps  */
 #ifndef BUS_SPI2_BAUDRATE
-   #define BUS_SPI2_BAUDRATE   10000000U /* baud rate of SPIn = 10 Mbps*/
+   #define BUS_SPI2_BAUDRATE   1000000U /* baud rate of SPIn = 1 Mbps*/
 #endif
 
 /**
