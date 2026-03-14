@@ -32,6 +32,7 @@
 #include "bluenrg_utils.h"
 #include "bluenrg_gap.h"
 #include "bluenrg_aci.h"
+#include "hci_le.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -331,7 +332,6 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
 	if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
 	{
-		/* Set our flag so main() knows something happened */
 		can_rx_flag = 1;
 	}
 }
@@ -389,7 +389,25 @@ void read_temp(void)
 
 void ble_init(void)
 {
+	uint8_t local_name[] =
+	{ AD_TYPE_COMPLETE_LOCAL_NAME, 'C', 'A', 'N', 'n', 'o', 'n' };
+	uint8_t bdaddr[] =
+	{ 0x12, 0x34, 0x00, 0xE1, 0x80, 0x02 }; // Random MAC: 02:80:E1:00:34:12
+	uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
+
 	hci_init(NULL, NULL);
+
+	hci_reset();
+	HAL_Delay(100);
+
+	aci_hal_write_config_data(CONFIG_DATA_PUBADDR_OFFSET, CONFIG_DATA_PUBADDR_LEN, bdaddr); ///Configure the MAC address
+	aci_gatt_init();
+
+	aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, 0x07, &service_handle, &dev_name_char_handle, &appearance_char_handle); // Initialize GAP layer (Sets device as a Peripheral/Slave)
+
+	aci_hal_set_tx_power_level(1, 4); // Set output power level (1=High Power)
+
+	aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), local_name, 0, NULL, 0, 0);
 
 	uint8_t hwVersion = 0;
 	uint16_t fwVersion = 0;
@@ -463,13 +481,15 @@ int main(void)
 	{
 		HAL_IWDG_Refresh(&hiwdg);
 
+		//hci_user_evt_proc();
+
 		if (cdc_connection_open_flag == 1)	//only init cli if USB CDC is open
 		{
 			if (!connection_message_sent)
 			{
 				cli_init(&cli);	//initialize cli
 				connection_message_sent = 1; // Mark message as sent
-				HAL_TIM_PWM_Start(&htim4, RED_LED);	// Red LED
+				HAL_TIM_PWM_Start(&htim4, RED_LED);
 				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
 			}
 
@@ -498,7 +518,6 @@ int main(void)
 				}
 				else
 				{
-					// If this prints, Device B sees the traffic but it's "corrupt"
 					cli.println("RX Message Error\r\n");
 				}
 
