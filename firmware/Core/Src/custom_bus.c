@@ -89,9 +89,7 @@ static uint32_t SPI_GetPrescaler( uint32_t clk_src_hz, uint32_t baudrate_mbps );
 int32_t BSP_SPI2_Init(void)
 {
   int32_t ret = BSP_ERROR_NONE;
-  __HAL_RCC_SPI2_CLK_ENABLE();
-  __HAL_RCC_SPI2_FORCE_RESET();
-  __HAL_RCC_SPI2_RELEASE_RESET();
+
   hspi2.Instance  = SPI2;
 
   if(SPI2InitCounter++ == 0)
@@ -271,7 +269,7 @@ __weak HAL_StatusTypeDef MX_SPI2_Init(SPI_HandleTypeDef* hspi)
   hspi->Instance = SPI2;
   hspi->Init.Mode = SPI_MODE_MASTER;
   hspi->Init.Direction = SPI_DIRECTION_2LINES;
-  hspi->Init.DataSize = SPI_DATASIZE_4BIT;
+  hspi->Init.DataSize = SPI_DATASIZE_8BIT;
   hspi->Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi->Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi->Init.NSS = SPI_NSS_SOFT;
