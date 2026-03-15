@@ -76,6 +76,8 @@ float temperature = 0.0f;
 float humidity = 0.0f;
 volatile uint8_t can_rx_flag = 0;
 uint8_t uart_rx_byte;
+uint16_t ble_connection_flag = 0;
+volatile uint8_t ble_initialized = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,6 +95,7 @@ static void MX_USART2_UART_Init(void);
 void cli_println(char *string);
 void read_temp(void);
 void ble_init(void);
+void HCI_Event_CB(void *pckt);
 
 HAL_StatusTypeDef can_set_mode(uint32_t mode);
 HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len);
@@ -336,32 +339,34 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 	}
 }
 
+void HAL_GPIO_EXTI_Rising_Callback(uint16_t GPIO_Pin)
+{
+	if (GPIO_Pin == BLE_SPI_IRQ_Pin)
+	{
+		hci_tl_lowlevel_isr();
+	}
+}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-  if (huart->Instance == USART4)
-  {
-    /* ONLY accept UART input if USB is physically disconnected */
-    if (cdc_connection_open_flag == 0)
-    {
-      /* 1. Pass the byte to the CLI */
-      cli_rx(uart_rx_byte);
+	if (huart->Instance == USART4)
+	{
+		if (cdc_connection_open_flag == 0)
+		{
+			cli_rx(uart_rx_byte);
 
-      /* 2. Echo back to the terminal */
-      if (uart_rx_byte == '\r')
-      {
-        uint8_t crlf[] = "\r\n";
-        /* Use a short timeout of 5ms so we don't trap the interrupt */
-        HAL_UART_Transmit(&huart4, crlf, 2, 5);
-      }
-      else
-      {
-        HAL_UART_Transmit(&huart4, &uart_rx_byte, 1, 5);
-      }
-    }
-
-    /* 3. Re-arm the UART interrupt to catch the next byte */
-    HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1);
-  }
+			if (uart_rx_byte == '\r') // If a Carriage Return (CR) is received, echo both CR and LF
+			{
+				uint8_t crlf[] = "\r\n";
+				HAL_UART_Transmit(&huart4, crlf, 2, 5); // 5ms timeout
+			}
+			else
+			{
+				HAL_UART_Transmit(&huart4, &uart_rx_byte, 1, 5); // Echo back to the terminal
+			}
+		}
+		HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1); //Re-arm the interrupt
+	}
 }
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
@@ -431,7 +436,7 @@ void ble_init(void)
 	{ 0x12, 0x34, 0x00, 0xE1, 0x80, 0x02 }; // Random MAC: 02:80:E1:00:34:12
 	uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
 
-	hci_init(NULL, NULL);
+	hci_init(HCI_Event_CB, NULL);
 	hci_reset();
 	HAL_Delay(100);
 
@@ -446,16 +451,71 @@ void ble_init(void)
 
 	uint8_t hwVersion = 0;
 	uint16_t fwVersion = 0;
-
 	if (getBlueNRGVersion(&hwVersion, &fwVersion) == BLE_UTIL_SUCCESS)
 	{
 		char msg[64];
 		sprintf(msg, "BLE Init Success! HW: %d, FW: %d\r\n", hwVersion, fwVersion);
 		cli.println(msg);
+		ble_initialized = 1;
 	}
 	else
 	{
 		cli.println("BLE Init Failed.\r\n");
+	}
+}
+
+void HCI_Event_CB(void *pckt)
+{
+	hci_uart_pckt *hci_pckt = (hci_uart_pckt*) pckt;
+
+	if (hci_pckt->type != HCI_EVENT_PKT)
+	{
+		return;
+	}
+
+	hci_event_pckt *event_pckt = (hci_event_pckt*) hci_pckt->data;
+
+	switch (event_pckt->evt)
+	{
+	/* ------------------------------------------- */
+	/* DISCONNECTION EVENT                         */
+	/* ------------------------------------------- */
+	case EVT_DISCONN_COMPLETE:
+	{
+		evt_disconn_complete *evt = (void*) event_pckt->data;
+
+		char msg[64];
+		sprintf(msg, "BLE Disconnected! Reason: 0x%02X\r\n", evt->reason);
+		cli.println(msg);
+
+		ble_connection_flag = 0;
+		cli.println("Restarting BLE Advertising...\r\n");
+
+		/* Restart the beacon */
+		uint8_t local_name[] =
+		{ AD_TYPE_COMPLETE_LOCAL_NAME, 'C', 'A', 'N', 'n', 'o', 'n' };
+		aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), (const char*) local_name, 0, NULL, 0, 0);
+	}
+		break;
+
+		/* ------------------------------------------- */
+		/* LE META EVENTS (Connections, etc.)          */
+		/* ------------------------------------------- */
+	case EVT_LE_META_EVENT:
+	{
+		evt_le_meta_event *evt = (void*) event_pckt->data;
+
+		if (evt->subevent == EVT_LE_CONN_COMPLETE)
+		{
+			evt_le_connection_complete *cc = (void*) evt->data;
+			ble_connection_flag = cc->handle;
+
+			char msg[64];
+			sprintf(msg, "BLE Connected! Handle: 0x%04X\r\n", ble_connection_flag);
+			cli.println(msg);
+		}
+	}
+		break;
 	}
 }
 /* USER CODE END 0 */
@@ -518,10 +578,13 @@ int main(void)
 	while (1)
 	{
 		HAL_IWDG_Refresh(&hiwdg);
-		//hci_user_evt_proc();
 		cli_process(&cli);	//periodically call to process incoming characters
 
-		/* CLI Init / De-Init based on USB VCP opening */
+		if (ble_initialized == 1)
+		{
+			hci_user_evt_proc();
+		}
+
 		if (cdc_connection_open_flag == 1)	//Init cli if USB CDC is open
 		{
 			if (!cdc_connection_message_sent)
@@ -544,14 +607,12 @@ int main(void)
 			}
 		}
 
-		/* Button Push Test */
 		if (button_pushed == 1)
 		{
 			read_temp();
 			button_pushed = 0;
 		}
 
-		/* CAN message processing (dependant on CAN init via CLI) */
 		if (can_rx_flag)
 		{
 			FDCAN_RxHeaderTypeDef RxHeader;
