@@ -274,6 +274,8 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 6 */
 	for (uint32_t i = 0; i < *Len; i++)
 	{
+		cli_rx(Buf[i]);
+
 		// If a Carriage Return (CR) is received, send both CR and LF
 		if (Buf[i] == '\r')
 		{
@@ -285,8 +287,6 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
 			CDC_Transmit_FS(&Buf[i], 1); // Echo the character back
 		}
 	}
-	volatile char c = Buf[0];
-	cli_rx(c);
 	USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
 	USBD_CDC_ReceivePacket(&hUsbDeviceFS);
 

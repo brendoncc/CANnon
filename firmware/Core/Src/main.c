@@ -69,12 +69,13 @@ DMA_HandleTypeDef hdma_usart2_tx;
 /* USER CODE BEGIN PV */
 uint16_t led_duty = 1;
 uint8_t led_direction = 1;
-uint8_t connection_message_sent = 0;
+uint8_t cdc_connection_message_sent = 0;
 extern volatile uint8_t cdc_connection_open_flag;
 volatile uint8_t button_pushed = 0;
 float temperature = 0.0f;
 float humidity = 0.0f;
 volatile uint8_t can_rx_flag = 0;
+uint8_t uart_rx_byte;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -287,7 +288,14 @@ cli_status_t ble_func(int argc, char **argv)
 
 void cli_println(char *string)
 {
-	CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
+	if (cdc_connection_open_flag == 1)
+	{
+		CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
+	}
+	else
+	{
+		HAL_UART_Transmit(&huart4, (uint8_t*) string, strlen(string), HAL_MAX_DELAY); //transmit CLI messages on UART interface
+	}
 	HAL_Delay(1); //debug only, small delay to test sequential transmissions
 }
 
@@ -326,6 +334,34 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 	{
 		button_pushed = 1;
 	}
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART4)
+  {
+    /* ONLY accept UART input if USB is physically disconnected */
+    if (cdc_connection_open_flag == 0)
+    {
+      /* 1. Pass the byte to the CLI */
+      cli_rx(uart_rx_byte);
+
+      /* 2. Echo back to the terminal */
+      if (uart_rx_byte == '\r')
+      {
+        uint8_t crlf[] = "\r\n";
+        /* Use a short timeout of 5ms so we don't trap the interrupt */
+        HAL_UART_Transmit(&huart4, crlf, 2, 5);
+      }
+      else
+      {
+        HAL_UART_Transmit(&huart4, &uart_rx_byte, 1, 5);
+      }
+    }
+
+    /* 3. Re-arm the UART interrupt to catch the next byte */
+    HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1);
+  }
 }
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
@@ -396,7 +432,6 @@ void ble_init(void)
 	uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
 
 	hci_init(NULL, NULL);
-
 	hci_reset();
 	HAL_Delay(100);
 
@@ -407,7 +442,7 @@ void ble_init(void)
 
 	aci_hal_set_tx_power_level(1, 4); // Set output power level (1=High Power)
 
-	aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), local_name, 0, NULL, 0, 0);
+	aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), (const char*) local_name, 0, NULL, 0, 0);
 
 	uint8_t hwVersion = 0;
 	uint16_t fwVersion = 0;
@@ -464,9 +499,12 @@ int main(void)
 	MX_IWDG_Init();
 	MX_USART2_UART_Init();
 	/* USER CODE BEGIN 2 */
+	HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1);
+
 	cli.println = cli_println;	//define function used for cli.println
 	cli.cmd_tbl = cmd_tbl;			//define name of array used for cmd_tbl
 	cli.cmd_cnt = sizeof(cmd_tbl) / sizeof(cmd_t);	//define number of commands
+	cli_init(&cli);
 
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);
 
@@ -480,60 +518,63 @@ int main(void)
 	while (1)
 	{
 		HAL_IWDG_Refresh(&hiwdg);
-
 		//hci_user_evt_proc();
+		cli_process(&cli);	//periodically call to process incoming characters
 
-		if (cdc_connection_open_flag == 1)	//only init cli if USB CDC is open
+		/* CLI Init / De-Init based on USB VCP opening */
+		if (cdc_connection_open_flag == 1)	//Init cli if USB CDC is open
 		{
-			if (!connection_message_sent)
+			if (!cdc_connection_message_sent)
 			{
-				cli_init(&cli);	//initialize cli
-				connection_message_sent = 1; // Mark message as sent
+				cli_init(&cli);	//Clean init of CLI for USB CDC
+				cdc_connection_message_sent = 1; // Mark message as sent
 				HAL_TIM_PWM_Start(&htim4, RED_LED);
 				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
 			}
-
-			if (button_pushed == 1)
-			{
-				read_temp();
-				button_pushed = 0;
-			}
-
-			if (can_rx_flag)
-			{
-				FDCAN_RxHeaderTypeDef RxHeader;
-				uint8_t RxData[8];
-				char msg[128];
-
-				if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
-				{
-					int len = sprintf(msg, "RX ID: 0x%03lX [%ld] Data: ", RxHeader.Identifier, RxHeader.DataLength >> 16);
-
-					for (int i = 0; i < 8; i++)
-					{
-						len += sprintf(msg + len, "%02X ", RxData[i]);
-					}
-					strcat(msg, "\r\n");
-					cli.println(msg);
-				}
-				else
-				{
-					cli.println("RX Message Error\r\n");
-				}
-
-				can_rx_flag = 0;
-			}
-			cli_process(&cli);	//periodically call to process incoming characters
 		}
 		else if (cdc_connection_open_flag == 0)
 		{
-			if (connection_message_sent) // if connection was previously open
+			if (cdc_connection_message_sent) // if connection was previously open
 			{
 				cli_deinit(&cli);
-				connection_message_sent = 0; //Mark state as disconnected/deinit
+				cdc_connection_message_sent = 0; //Mark state as disconnected/deinit
 				HAL_TIM_PWM_Stop(&htim4, RED_LED);
 				HAL_TIM_PWM_Start(&htim4, GRN_LED);
+				cli_init(&cli);	//Clean init of CLI to move back to UART
 			}
+		}
+
+		/* Button Push Test */
+		if (button_pushed == 1)
+		{
+			read_temp();
+			button_pushed = 0;
+		}
+
+		/* CAN message processing (dependant on CAN init via CLI) */
+		if (can_rx_flag)
+		{
+			FDCAN_RxHeaderTypeDef RxHeader;
+			uint8_t RxData[8];
+			char msg[128];
+
+			if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
+			{
+				int len = sprintf(msg, "RX ID: 0x%03lX [%ld] Data: ", RxHeader.Identifier, RxHeader.DataLength >> 16);
+
+				for (int i = 0; i < 8; i++)
+				{
+					len += sprintf(msg + len, "%02X ", RxData[i]);
+				}
+				strcat(msg, "\r\n");
+				cli.println(msg);
+			}
+			else
+			{
+				cli.println("RX Message Error\r\n");
+			}
+
+			can_rx_flag = 0;
 		}
 		/* USER CODE END WHILE */
 

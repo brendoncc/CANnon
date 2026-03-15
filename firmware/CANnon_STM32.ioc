@@ -101,6 +101,7 @@ NVIC.SysTick_IRQn=true\:0\:0\:true\:false\:true\:false\:true\:false
 NVIC.TIM16_FDCAN_IT0_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 NVIC.TIM17_FDCAN_IT1_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 NVIC.USART2_LPUART2_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
+NVIC.USART3_4_5_6_LPUART1_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 NVIC.USB_UCPD1_2_IRQn=true\:0\:0\:false\:false\:true\:true\:true\:true
 PA0.Locked=true
 PA0.Mode=Asynchronous
