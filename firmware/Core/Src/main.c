@@ -22,17 +22,19 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include <usbd_cdc_if.h>
 #include "cli.h"
 #include "cli_defs.h"
 #include "hdc2021.h"
-#include <stdio.h>
 #include "hci.h"
 #include "hci_tl.h"
+#include "hci_le.h"
 #include "bluenrg_utils.h"
 #include "bluenrg_gap.h"
 #include "bluenrg_aci.h"
-#include "hci_le.h"
+#include "bluenrg_gatt_aci.h"
+#include "bluenrg_gatt_server.h"
+#include "usbd_cdc_if.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,6 +69,7 @@ UART_HandleTypeDef huart4;
 DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
+
 uint16_t led_duty = 1;
 uint8_t led_direction = 1;
 uint8_t cdc_connection_message_sent = 0;
@@ -78,6 +81,10 @@ volatile uint8_t can_rx_flag = 0;
 uint8_t uart_rx_byte;
 uint16_t ble_connection_flag = 0;
 volatile uint8_t ble_initialized = 0;
+uint16_t cli_serv_handle = 0;
+uint16_t cli_rx_char_handle = 0; // Web Browser writes TO this
+uint16_t cli_tx_char_handle = 0; // STM32 notifies FROM this
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -295,16 +302,70 @@ void cli_println(char *string)
 	{
 		CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
 	}
+	else if (ble_connection_flag != 0)
+	{
+		uint16_t len = strlen(string);
+		uint8_t *ptr = (uint8_t*) string;
+
+		/* Slice the string into 20-byte BLE packets */
+		while (len > 0)
+		{
+			uint8_t chunk_len = (len > 20) ? 20 : len;
+
+			/* Attempt to send the chunk */
+			tBleStatus status = aci_gatt_update_char_value(cli_serv_handle, cli_tx_char_handle, 0, chunk_len, ptr);
+
+			uint8_t retry_count = 0;
+			while (status != BLE_STATUS_SUCCESS && retry_count < 20) //retry max 20 times if not successful (e.g. tx buffer full)
+			{
+				HAL_Delay(5);
+				status = aci_gatt_update_char_value(cli_serv_handle, cli_tx_char_handle, 0, chunk_len, ptr);
+				retry_count++;
+			}
+
+			ptr += chunk_len;
+			len -= chunk_len;
+
+			if (len > 0)
+			{
+				HAL_Delay(5);
+			}
+		}
+
+		HAL_Delay(10);
+	}
 	else
 	{
 		HAL_UART_Transmit(&huart4, (uint8_t*) string, strlen(string), HAL_MAX_DELAY); //transmit CLI messages on UART interface
 	}
-	HAL_Delay(1); //debug only, small delay to test sequential transmissions
+	HAL_Delay(1);
 }
 
 void cli_rx(char c)
 {
 	cli_put(&cli, c);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if (huart->Instance == USART4)
+	{
+		if (cdc_connection_open_flag == 0)
+		{
+			cli_rx(uart_rx_byte);
+
+			if (uart_rx_byte == '\r') // If a Carriage Return (CR) is received, echo both CR and LF
+			{
+				uint8_t crlf[] = "\r\n";
+				HAL_UART_Transmit(&huart4, crlf, 2, 5); // 5ms timeout
+			}
+			else
+			{
+				HAL_UART_Transmit(&huart4, &uart_rx_byte, 1, 5); // Echo back to the terminal
+			}
+		}
+		HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1); //Re-arm the interrupt
+	}
 }
 
 void breathe_LED(void)
@@ -339,26 +400,15 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 	}
 }
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+void read_temp(void)
 {
-	if (huart->Instance == USART4)
-	{
-		if (cdc_connection_open_flag == 0)
-		{
-			cli_rx(uart_rx_byte);
+	HDC2021_TriggerMeasurement(&hi2c2);
+	temperature = HDC2021_ReadTemperature(&hi2c2);
+	humidity = HDC2021_ReadHumidity(&hi2c2);
 
-			if (uart_rx_byte == '\r') // If a Carriage Return (CR) is received, echo both CR and LF
-			{
-				uint8_t crlf[] = "\r\n";
-				HAL_UART_Transmit(&huart4, crlf, 2, 5); // 5ms timeout
-			}
-			else
-			{
-				HAL_UART_Transmit(&huart4, &uart_rx_byte, 1, 5); // Echo back to the terminal
-			}
-		}
-		HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1); //Re-arm the interrupt
-	}
+	char msg[30];
+	sprintf(msg, "T: %.2fC, H: %.2f%%\r\n", temperature, humidity);
+	cli.println(msg);
 }
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
@@ -409,17 +459,6 @@ HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len)
 	return HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, data);
 }
 
-void read_temp(void)
-{
-	HDC2021_TriggerMeasurement(&hi2c2);
-	temperature = HDC2021_ReadTemperature(&hi2c2);
-	humidity = HDC2021_ReadHumidity(&hi2c2);
-
-	char msg[30];
-	sprintf(msg, "T: %.2fC, H: %.2f%%\r\n", temperature, humidity);
-	cli.println(msg);
-}
-
 void ble_init(void)
 {
 	uint8_t local_name[] =
@@ -427,6 +466,9 @@ void ble_init(void)
 	uint8_t bdaddr[] =
 	{ 0x12, 0x34, 0x00, 0xE1, 0x80, 0x02 }; // Random MAC: 02:80:E1:00:34:12
 	uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
+
+	uint8_t hwVersion = 0;
+	uint16_t fwVersion = 0;
 
 	hci_init(HCI_Event_CB, NULL);
 	hci_reset();
@@ -441,8 +483,35 @@ void ble_init(void)
 
 	aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), (const char*) local_name, 0, NULL, 0, 0);
 
-	uint8_t hwVersion = 0;
-	uint16_t fwVersion = 0;
+	/* 1. Define Nordic UART Service (NUS) 128-bit UUIDs (Little-Endian) */
+
+	/* NUS Service UUID: 6E400001-B5A3-F393-E0A9-E50E24DCCA9E */
+	uint8_t cli_serv_uuid[16] =
+	{ 0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0, 0x93, 0xf3, 0xa3, 0xb5, 0x01, 0x00, 0x40, 0x6e };
+
+	/* NUS RX Char UUID: 6E400002-B5A3-F393-E0A9-E50E24DCCA9E (Browser -> Board) */
+	uint8_t cli_rx_uuid[16] =
+	{ 0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0, 0x93, 0xf3, 0xa3, 0xb5, 0x02, 0x00, 0x40, 0x6e };
+
+	/* NUS TX Char UUID: 6E400003-B5A3-F393-E0A9-E50E24DCCA9E (Board -> Browser) */
+	uint8_t cli_tx_uuid[16] =
+	{ 0x9e, 0xca, 0xdc, 0x24, 0x0e, 0xe5, 0xa9, 0xe0, 0x93, 0xf3, 0xa3, 0xb5, 0x03, 0x00, 0x40, 0x6e };
+
+	/* 2. Add the Service to the BLE Stack */
+	/* Max attributes = 7 (1 for service + 2 for each char + 2 for CCCD descriptors) */
+	aci_gatt_add_serv(UUID_TYPE_128, cli_serv_uuid, PRIMARY_SERVICE, 7, &cli_serv_handle);
+
+	/* 3. Add RX Characteristic (WRITE property, Max 20 bytes) */
+	/* GATT_NOTIFY_ATTRIBUTE_WRITE tells the stack to fire an event when the PC writes to this! */
+	aci_gatt_add_char(cli_serv_handle, UUID_TYPE_128, cli_rx_uuid, 20,
+	CHAR_PROP_WRITE | CHAR_PROP_WRITE_WITHOUT_RESP,
+	ATTR_PERMISSION_NONE, GATT_NOTIFY_ATTRIBUTE_WRITE, 16, 1, &cli_rx_char_handle);
+
+	/* 4. Add TX Characteristic (NOTIFY property, Max 20 bytes) */
+	aci_gatt_add_char(cli_serv_handle, UUID_TYPE_128, cli_tx_uuid, 20,
+	CHAR_PROP_NOTIFY,
+	ATTR_PERMISSION_NONE, 0, 16, 1, &cli_tx_char_handle);
+
 	if (getBlueNRGVersion(&hwVersion, &fwVersion) == BLE_UTIL_SUCCESS)
 	{
 		char msg[64];
@@ -508,6 +577,51 @@ void HCI_Event_CB(void *pckt)
 		}
 	}
 		break;
+
+		/* ------------------------------------------- */
+		/* VENDOR EVENTS (Incoming GATT Data, etc.)    */
+		/* ------------------------------------------- */
+	case EVT_VENDOR:
+	{
+		/* BlueNRG-MS uses evt_blue_aci for vendor packets */
+		evt_blue_aci *blue_evt = (evt_blue_aci*) event_pckt->data;
+
+		/* Did a GATT attribute get modified (written to by the web browser)? */
+		if (blue_evt->ecode == EVT_BLUE_GATT_ATTRIBUTE_MODIFIED)
+		{
+			/* Use the BlueNRG-MS specific struct hidden in bluenrg_gatt_server.h */
+			evt_gatt_attr_modified_IDB05A1 *evt = (evt_gatt_attr_modified_IDB05A1*) blue_evt->data;
+
+			/* Does the handle match our RX characteristic?
+			 (Note: ST's value handle is always the characteristic handle + 1) */
+			if (evt->attr_handle == (cli_rx_char_handle + 1))
+			{
+				/* Process each received byte */
+				for (uint8_t i = 0; i < evt->data_length; i++)
+				{
+					char c = evt->att_data[i];
+
+					/* 1. Feed character to the CLI buffer */
+					cli_rx(c);
+
+					/* 2. Echo character back to the terminal */
+					if (c == '\r')
+					{
+						/* If Carriage Return, echo CRLF to move to the next line */
+						cli_println("\r\n");
+					}
+					else
+					{
+						/* Convert single char to a null-terminated string and echo */
+						char echo_str[2] =
+						{ c, '\0' };
+						cli_println(echo_str);
+					}
+				}
+			}
+		}
+	}
+		break;
 	}
 }
 /* USER CODE END 0 */
@@ -551,7 +665,9 @@ int main(void)
 	MX_IWDG_Init();
 	MX_USART2_UART_Init();
 	/* USER CODE BEGIN 2 */
+
 	HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1);
+	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
 
 	cli.println = cli_println;	//define function used for cli.println
 	cli.cmd_tbl = cmd_tbl;			//define name of array used for cmd_tbl
@@ -560,7 +676,7 @@ int main(void)
 
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);
 
-	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
+	ble_init();
 
 	/* USER CODE END 2 */
 
