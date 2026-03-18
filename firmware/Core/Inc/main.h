@@ -37,11 +37,19 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
-
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+
+typedef enum
+{
+	CLI_PORT_UART, // Fallback priority
+	CLI_PORT_BLE,  // Medium priority
+	CLI_PORT_USB   // Highest priority
+} cli_port_t;
+
+extern cli_port_t current_cli_port;
 
 /* USER CODE END EC */
 

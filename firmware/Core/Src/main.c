@@ -118,6 +118,8 @@ cli_status_t ble_func(int argc, char **argv);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+cli_port_t current_cli_port = CLI_PORT_UART;
+cli_port_t target_cli_port = CLI_PORT_UART;
 
 cli_t cli;	//creates instance of the CLI function
 
@@ -298,11 +300,11 @@ cli_status_t ble_func(int argc, char **argv)
 
 void cli_println(char *string)
 {
-	if (cdc_connection_open_flag == 1)
+	if (current_cli_port == CLI_PORT_USB)
 	{
 		CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
 	}
-	else if (ble_connection_flag != 0)
+	else if (current_cli_port == CLI_PORT_BLE)
 	{
 		uint16_t len = strlen(string);
 		uint8_t *ptr = (uint8_t*) string;
@@ -350,14 +352,14 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if (huart->Instance == USART4)
 	{
-		if (cdc_connection_open_flag == 0)
+		if (current_cli_port == CLI_PORT_UART)
 		{
 			cli_rx(uart_rx_byte);
 
 			if (uart_rx_byte == '\r') // If a Carriage Return (CR) is received, echo both CR and LF
 			{
 				uint8_t crlf[] = "\r\n";
-				HAL_UART_Transmit(&huart4, crlf, 2, 5); // 5ms timeout
+				HAL_UART_Transmit(&huart4, crlf, 2, 5);
 			}
 			else
 			{
@@ -583,39 +585,33 @@ void HCI_Event_CB(void *pckt)
 		/* ------------------------------------------- */
 	case EVT_VENDOR:
 	{
-		/* BlueNRG-MS uses evt_blue_aci for vendor packets */
 		evt_blue_aci *blue_evt = (evt_blue_aci*) event_pckt->data;
 
-		/* Did a GATT attribute get modified (written to by the web browser)? */
 		if (blue_evt->ecode == EVT_BLUE_GATT_ATTRIBUTE_MODIFIED)
 		{
-			/* Use the BlueNRG-MS specific struct hidden in bluenrg_gatt_server.h */
 			evt_gatt_attr_modified_IDB05A1 *evt = (evt_gatt_attr_modified_IDB05A1*) blue_evt->data;
 
-			/* Does the handle match our RX characteristic?
-			 (Note: ST's value handle is always the characteristic handle + 1) */
 			if (evt->attr_handle == (cli_rx_char_handle + 1))
 			{
 				/* Process each received byte */
-				for (uint8_t i = 0; i < evt->data_length; i++)
+				if (current_cli_port == CLI_PORT_BLE)
 				{
-					char c = evt->att_data[i];
-
-					/* 1. Feed character to the CLI buffer */
-					cli_rx(c);
-
-					/* 2. Echo character back to the terminal */
-					if (c == '\r')
+					for (uint8_t i = 0; i < evt->data_length; i++)
 					{
-						/* If Carriage Return, echo CRLF to move to the next line */
-						cli_println("\r\n");
-					}
-					else
-					{
-						/* Convert single char to a null-terminated string and echo */
-						char echo_str[2] =
-						{ c, '\0' };
-						cli_println(echo_str);
+						char c = evt->att_data[i];
+
+						cli_rx(c);
+
+						if (c == '\r')
+						{
+							cli_println("\r\n");
+						}
+						else
+						{
+							char echo_str[2] =
+							{ c, '\0' };
+							cli_println(echo_str);
+						}
 					}
 				}
 			}
@@ -624,6 +620,7 @@ void HCI_Event_CB(void *pckt)
 		break;
 	}
 }
+
 /* USER CODE END 0 */
 
 /**
@@ -693,25 +690,56 @@ int main(void)
 			hci_user_evt_proc();
 		}
 
-		if (cdc_connection_open_flag == 1)	//Init cli if USB CDC is open
+		if (cdc_connection_open_flag == 1)
 		{
-			if (!cdc_connection_message_sent)
+			target_cli_port = CLI_PORT_USB;
+		}
+		else if (ble_connection_flag != 0)
+		{
+			target_cli_port = CLI_PORT_BLE;
+		}
+		else
+		{
+			target_cli_port = CLI_PORT_UART;
+		}
+
+		if (current_cli_port != target_cli_port)
+		{
+
+			if (target_cli_port == CLI_PORT_USB)
 			{
-				cli_init(&cli);	//Clean init of CLI for USB CDC
-				cdc_connection_message_sent = 1; // Mark message as sent
+				cli.println("\r\n[CLI Disconnected - USB Connection Overriding]\r\n");
+			}
+			else if (target_cli_port == CLI_PORT_BLE)
+			{
+				cli.println("\r\n[CLI Disconnected - BLE Connection Overriding]\r\n");
+			}
+			else
+			{
+				cli.println("\r\n[CLI Disconnected - Reverting to UART]\r\n");
+			}
+
+			current_cli_port = target_cli_port;
+
+			cli_init(&cli);
+
+			if (target_cli_port == CLI_PORT_USB)
+			{
 				HAL_TIM_PWM_Start(&htim4, RED_LED);
 				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
+				HAL_TIM_PWM_Stop(&htim4, BLU_LED);
 			}
-		}
-		else if (cdc_connection_open_flag == 0)
-		{
-			if (cdc_connection_message_sent) // if connection was previously open
+			else if (target_cli_port == CLI_PORT_BLE)
 			{
-				cli_deinit(&cli);
-				cdc_connection_message_sent = 0; //Mark state as disconnected/deinit
+				HAL_TIM_PWM_Stop(&htim4, RED_LED);
+				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
+				HAL_TIM_PWM_Start(&htim4, BLU_LED);
+			}
+			else
+			{
 				HAL_TIM_PWM_Stop(&htim4, RED_LED);
 				HAL_TIM_PWM_Start(&htim4, GRN_LED);
-				cli_init(&cli);	//Clean init of CLI to move back to UART
+				HAL_TIM_PWM_Stop(&htim4, BLU_LED);
 			}
 		}
 
