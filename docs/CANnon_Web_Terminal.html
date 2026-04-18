@@ -131,7 +131,7 @@
             try {
                 // FIX: Call requestDevice IMMEDIATELY to preserve the mouse click gesture!
                 bleDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ name: 'CANnon' }],
+                    filters: [{ namePrefix: 'CANnon' }],
                     optionalServices: [NUS_SERVICE_UUID]
                 });
 

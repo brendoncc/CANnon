@@ -80,6 +80,8 @@ float humidity = 0.0f;
 volatile uint8_t can_rx_flag = 0;
 uint8_t uart_rx_byte;
 uint16_t ble_connection_flag = 0;
+uint8_t ble_local_name[13]; // Array to hold: [AD_TYPE][C][A][N][n][o][n][-][X][X][X][X]
+uint8_t ble_mac_addr[6];    // Array to store the factory MAC we read from the module
 volatile uint8_t ble_initialized = 0;
 uint16_t cli_serv_handle = 0;
 uint16_t cli_rx_char_handle = 0; // Web Browser writes TO this
@@ -463,12 +465,23 @@ HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len)
 
 void ble_init(void)
 {
-	uint8_t local_name[] =
-	{ AD_TYPE_COMPLETE_LOCAL_NAME, 'C', 'A', 'N', 'n', 'o', 'n' };
-	uint8_t bdaddr[] =
-	{ 0x12, 0x34, 0x00, 0xE1, 0x80, 0x02 }; // Random MAC: 02:80:E1:00:34:12
-	uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
+	// Extract the STM32's unique factory silicon ID
+	uint32_t uid_word0 = *(uint32_t*) (UID_BASE);
+	uint32_t uid_word1 = *(uint32_t*) (UID_BASE + 0x04);
 
+	// Format the global broadcast name using the UID */
+	ble_local_name[0] = AD_TYPE_COMPLETE_LOCAL_NAME;
+	sprintf((char*) &ble_local_name[1], "CANnon-%04X", (unsigned int) (uid_word0 & 0xFFFF));
+
+	// Generate a Unique Static MAC Address using the bits from the UID
+	ble_mac_addr[0] = (uid_word0 >> 0) & 0xFF;
+	ble_mac_addr[1] = (uid_word0 >> 8) & 0xFF;
+	ble_mac_addr[2] = (uid_word0 >> 16) & 0xFF;
+	ble_mac_addr[3] = (uid_word0 >> 24) & 0xFF;
+	ble_mac_addr[4] = (uid_word1 >> 0) & 0xFF;
+	ble_mac_addr[5] = 0xC0; // Top 2 bits must be 11 (0xC0) for a valid Static Random MAC
+
+	uint16_t service_handle, dev_name_char_handle, appearance_char_handle;
 	uint8_t hwVersion = 0;
 	uint16_t fwVersion = 0;
 
@@ -476,14 +489,17 @@ void ble_init(void)
 	hci_reset();
 	HAL_Delay(100);
 
-	aci_hal_write_config_data(CONFIG_DATA_PUBADDR_OFFSET, CONFIG_DATA_PUBADDR_LEN, bdaddr); ///Configure the MAC address
+	// Write our dynamically generated unique MAC to the BlueNRG RAM (Overwriting the empty FF:FF:FF...)
+	aci_hal_write_config_data(CONFIG_DATA_PUBADDR_OFFSET, 6, ble_mac_addr);
+
 	aci_gatt_init();
 
-	aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, 0x07, &service_handle, &dev_name_char_handle, &appearance_char_handle); // Initialize GAP layer (Sets device as a Peripheral/Slave)
+	// Initialize GAP layer (Sets device as a Peripheral/Slave)
+	aci_gap_init_IDB05A1(GAP_PERIPHERAL_ROLE_IDB05A1, 0, 0x07, &service_handle, &dev_name_char_handle, &appearance_char_handle);
 
-	aci_hal_set_tx_power_level(1, 4); // Set output power level (1=High Power)
-
-	aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), (const char*) local_name, 0, NULL, 0, 0);
+	// Set output power level (1=High Power)
+	aci_hal_set_tx_power_level(1, 4);
+	aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, 12, (const char*) ble_local_name, 0, NULL, 0, 0);
 
 	/* 1. Define Nordic UART Service (NUS) 128-bit UUIDs (Little-Endian) */
 
@@ -516,9 +532,11 @@ void ble_init(void)
 
 	if (getBlueNRGVersion(&hwVersion, &fwVersion) == BLE_UTIL_SUCCESS)
 	{
-		char msg[64];
-		sprintf(msg, "BLE Init Success! HW: %d, FW: %d\r\n", hwVersion, fwVersion);
+		char msg[128];
+		sprintf(msg, "\r\nBLE Init Success!\r\n - Name: %s\r\n - MAC:  %02X:%02X:%02X:%02X:%02X:%02X\r\n", &ble_local_name[1], ble_mac_addr[5], ble_mac_addr[4], ble_mac_addr[3],
+				ble_mac_addr[2], ble_mac_addr[1], ble_mac_addr[0]);
 		cli.println(msg);
+
 		ble_initialized = 1;
 	}
 	else
@@ -555,9 +573,7 @@ void HCI_Event_CB(void *pckt)
 		cli.println("Restarting BLE Advertising...\r\n");
 
 		/* Restart the beacon */
-		uint8_t local_name[] =
-		{ AD_TYPE_COMPLETE_LOCAL_NAME, 'C', 'A', 'N', 'n', 'o', 'n' };
-		aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, sizeof(local_name), (const char*) local_name, 0, NULL, 0, 0);
+		aci_gap_set_discoverable(ADV_IND, 0x0100, 0x0200, PUBLIC_ADDR, NO_WHITE_LIST_USE, 12, (const char*) ble_local_name, 0, NULL, 0, 0);
 	}
 		break;
 
