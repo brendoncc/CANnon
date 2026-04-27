@@ -31,7 +31,8 @@
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
-volatile uint8_t cdc_connection_open_flag = 0;
+volatile bool CDC_Connection_Open_Flag = false;
+extern system_mode_t current_system_mode;
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -227,11 +228,11 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
 
 		if (req->wValue & 0x0001) // Check DTR bit (Bit 0 of wValue)
 		{
-			cdc_connection_open_flag = 1; // DTR is asserted, connection opened
+			CDC_Connection_Open_Flag = true; // DTR is asserted, connection opened
 		}
 		else
 		{
-			cdc_connection_open_flag = 0; // DTR is de-asserted, connection closed
+			CDC_Connection_Open_Flag = false; // DTR is de-asserted, connection closed
 		}
 
 		break;
@@ -266,27 +267,40 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t *Buf, uint32_t *Len)
 {
 	/* USER CODE BEGIN 6 */
-	if (current_cli_port == CLI_PORT_USB)
+	if (current_system_mode == MODE_SLCAN)
 	{
-
+		/* The USB port is a dedicated CAN bridge. Process everything silently. */
 		for (uint32_t i = 0; i < *Len; i++)
 		{
-			cli_rx(Buf[i]);
+			slcan_rx(Buf[i]);
+		}
+	}
+	else if (current_system_mode == MODE_CLI)
+	{
+		if (current_cli_port == CLI_PORT_USB)
+		{
 
-			// If a Carriage Return (CR) is received, send both CR and LF
-			if (Buf[i] == '\r')
+			for (uint32_t i = 0; i < *Len; i++)
 			{
-				uint8_t crlf[] = "\r\n"; // Or {0x0D, 0x0A}
-				CDC_Transmit_FS(crlf, sizeof(crlf) - 1); // Transmit CR LF
-			}
-			else
-			{
-				CDC_Transmit_FS(&Buf[i], 1); // Echo the character back
+				cli_rx(Buf[i]);
+
+				// If a Carriage Return (CR) is received, send both CR and LF
+				if (Buf[i] == '\r')
+				{
+					uint8_t crlf[] = "\r\n"; // Or {0x0D, 0x0A}
+					CDC_Transmit_FS(crlf, sizeof(crlf) - 1); // Transmit CR LF
+				}
+				else
+				{
+					CDC_Transmit_FS(&Buf[i], 1); // Echo the character back
+				}
 			}
 		}
-		USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
-		USBD_CDC_ReceivePacket(&hUsbDeviceFS);
 	}
+
+	USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
+	USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+
 	return (USBD_OK);
 	/* USER CODE END 6 */
 }

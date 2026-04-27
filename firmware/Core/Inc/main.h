@@ -16,6 +16,44 @@
  *
  ******************************************************************************
  */
+
+/**
+ * @defgroup Hardware_Map Hardware Resource Allocation Map
+ * @brief Master ledger of hardware resources used in the CANnon project.
+ *
+ * =========================================================================
+ * HARDWARE RESOURCE ALLOCATION MAP
+ * =========================================================================
+ *
+ * -- TIMERS --
+ * TIM2: CAN Power Clock (PWM Channel 2)
+ * TIM4: Status LEDs PWM (CH2: Green, CH3: Red, CH4: Blue)
+ *
+ * -- CONNECTIVITY --
+ * USART2: Debug Console (ST-Link VCP)
+ * USART4: UART CLI Interface
+ * I2C2:   HDC2021 Temperature & Humidity Sensor
+ * FDCAN1: CAN Bus Interface
+ * SPI2:   BlueNRG-M0L BLE Module Interface
+ * USBFS: USB CDC Interface (Highest Priority CLI)
+ *
+ * -- GPIO --
+ * GPIOB_1:  BLE_RESET (Output)
+ * GPIOB_4:  CAN_PWR_EN (Output)
+ * GPIOB_12: BLE_SPI_CS (Output)
+ *
+ * -- EXTI LINES (EXTI4_15_IRQn) --
+ * EXTI_Line13: BLE Module SPI IRQ (Rising Edge - GPIOB_13)
+ * EXTI_Line14: User Button (Falling Edge - GPIOB_14)
+ *
+ * -- DMA CHANNELS --
+ * DMA1_Channel2_3: USART2 TX (Debug Console / Logging)
+ *
+ * -- SYSTEM --
+ * IWDG:  Independent Watchdog Timer
+ *
+ * =========================================================================
+ */
 /* USER CODE END Header */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
@@ -28,19 +66,26 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32g0xx_hal.h"
-
 #include "hci_tl_interface.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
+#include "slcan.h"
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
+typedef enum {
+    MODE_CLI,      // Human interactive mode (Default)
+    MODE_SLCAN     // Machine-to-Machine bridge mode
+} system_mode_t;
+
+extern system_mode_t current_system_mode;
 
 typedef enum
 {

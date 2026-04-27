@@ -70,22 +70,40 @@ DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 
-uint16_t led_duty = 1;
-uint8_t led_direction = 1;
-uint8_t cdc_connection_message_sent = 0;
-extern volatile uint8_t cdc_connection_open_flag;
-volatile uint8_t button_pushed = 0;
-float temperature = 0.0f;
-float humidity = 0.0f;
-volatile uint8_t can_rx_flag = 0;
-uint8_t uart_rx_byte;
-uint16_t ble_connection_flag = 0;
-uint8_t ble_local_name[13]; // Array to hold: [AD_TYPE][C][A][N][n][o][n][-][X][X][X][X]
-uint8_t ble_mac_addr[6];    // Array to store the factory MAC we read from the module
-volatile uint8_t ble_initialized = 0;
-uint16_t cli_serv_handle = 0;
-uint16_t cli_rx_char_handle = 0; // Web Browser writes TO this
-uint16_t cli_tx_char_handle = 0; // STM32 notifies FROM this
+/* Misc Variables */
+typedef struct
+{
+	float temperature;
+	float humidity;
+} sensor_data_t;
+static sensor_data_t environment_data =
+{ 0.0f, 0.0f };
+
+static uint16_t led_duty = 1;
+static uint8_t led_direction = 1;
+static volatile bool button_pushed_flag = false;
+
+/* CLI Interface Variables */
+static uint8_t uart_rx_byte;
+system_mode_t current_system_mode = MODE_CLI;
+
+/* CAN Variables */
+static volatile bool can_rx_flag = false;
+
+/* BLE Variables */
+static uint16_t ble_active_conn_handle = 0;
+static uint8_t ble_local_name[13]; // Array to hold: [AD_TYPE][C][A][N][n][o][n][-][X][X][X][X]
+static uint8_t ble_mac_addr[6];    // Array to store the custom MAC address
+static volatile bool ble_initialized = false;
+
+typedef struct
+{
+	uint16_t service;
+	uint16_t rx_char;
+	uint16_t tx_char;
+} ble_handles_t;
+static ble_handles_t cli_ble_handles =
+{ 0, 0, 0 };
 
 /* USER CODE END PV */
 
@@ -114,6 +132,7 @@ cli_status_t can_pwr_func(int argc, char **argv);
 cli_status_t temp_func(int argc, char **argv);
 cli_status_t can_test_func(int argc, char **argv);
 cli_status_t can_monitor_func(int argc, char **argv);
+cli_status_t slcan_func(int argc, char **argv);
 cli_status_t ble_func(int argc, char **argv);
 
 /* USER CODE END PFP */
@@ -126,13 +145,14 @@ cli_port_t target_cli_port = CLI_PORT_UART;
 cli_t cli;	//creates instance of the CLI function
 
 //table of commands and respective functions
-cmd_t cmd_tbl[6] =
+cmd_t cmd_tbl[7] =
 {
 { .cmd = "help", .func = help_func },
 { .cmd = "can_power", .func = can_pwr_func },
 { .cmd = "temp", .func = temp_func },
 { .cmd = "can_test", .func = can_test_func },
 { .cmd = "can_monitor", .func = can_monitor_func },
+{ .cmd = "slcan", .func = slcan_func },
 { .cmd = "ble", .func = ble_func } };
 
 cli_status_t help_func(int argc, char **argv)
@@ -142,6 +162,7 @@ cli_status_t help_func(int argc, char **argv)
 	cli.println("can_power 	[ 1 | 0 | -help ] \r\n");
 	cli.println("can_test 	[ -start | -help ] \r\n");
 	cli.println("can_monitor 	[ -start | -help ] \r\n");
+	cli.println("slcan 	[ -start | -help ] \r\n");
 	cli.println("temp 		[ -read | -help ] \r\n");
 	cli.println("ble 		[ -init | -help ] \r\n");
 	return CLI_OK;
@@ -275,6 +296,31 @@ cli_status_t can_monitor_func(int argc, char **argv)
 	return CLI_OK;
 }
 
+cli_status_t slcan_func(int argc, char **argv)
+{
+	if (argc > 0)
+	{
+		if (strcmp(argv[1], "-help") == 0)
+		{
+			cli.println("-- slcan help menu --\r\n");
+			cli.println("slcan -start	//Change USB mode to slcan for CAN to USB bridge \r\n");
+		}
+		else if (strcmp(argv[1], "-start") == 0)
+		{
+			cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
+			cli.println("Reset board to exit.\r\n");
+			HAL_Delay(50); // Let the message flush over USB
+			current_system_mode = MODE_SLCAN;
+		}
+		else
+		{
+			cli.println("slcan invalid argument \r\n");
+			return CLI_E_INVALID_ARGS;
+		}
+	}
+	return CLI_OK;
+}
+
 cli_status_t ble_func(int argc, char **argv)
 {
 
@@ -302,7 +348,7 @@ cli_status_t ble_func(int argc, char **argv)
 
 void cli_println(char *string)
 {
-	if (current_cli_port == CLI_PORT_USB)
+	if (current_cli_port == CLI_PORT_USB && current_system_mode == MODE_CLI)
 	{
 		CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
 	}
@@ -317,13 +363,13 @@ void cli_println(char *string)
 			uint8_t chunk_len = (len > 20) ? 20 : len;
 
 			/* Attempt to send the chunk */
-			tBleStatus status = aci_gatt_update_char_value(cli_serv_handle, cli_tx_char_handle, 0, chunk_len, ptr);
+			tBleStatus status = aci_gatt_update_char_value(cli_ble_handles.service, cli_ble_handles.tx_char, 0, chunk_len, ptr);
 
 			uint8_t retry_count = 0;
 			while (status != BLE_STATUS_SUCCESS && retry_count < 20) //retry max 20 times if not successful (e.g. tx buffer full)
 			{
 				HAL_Delay(5);
-				status = aci_gatt_update_char_value(cli_serv_handle, cli_tx_char_handle, 0, chunk_len, ptr);
+				status = aci_gatt_update_char_value(cli_ble_handles.service, cli_ble_handles.tx_char, 0, chunk_len, ptr);
 				retry_count++;
 			}
 
@@ -400,18 +446,18 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 {
 	if (GPIO_Pin == USR_BTN_Pin)
 	{
-		button_pushed = 1;
+		button_pushed_flag = true;
 	}
 }
 
 void read_temp(void)
 {
 	HDC2021_TriggerMeasurement(&hi2c2);
-	temperature = HDC2021_ReadTemperature(&hi2c2);
-	humidity = HDC2021_ReadHumidity(&hi2c2);
+	environment_data.temperature = HDC2021_ReadTemperature(&hi2c2);
+	environment_data.humidity = HDC2021_ReadHumidity(&hi2c2);
 
 	char msg[30];
-	sprintf(msg, "T: %.2fC, H: %.2f%%\r\n", temperature, humidity);
+	sprintf(msg, "T: %.2fC, H: %.2f%%\r\n", environment_data.temperature, environment_data.humidity);
 	cli.println(msg);
 }
 
@@ -419,7 +465,7 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
 	if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0)
 	{
-		can_rx_flag = 1;
+		can_rx_flag = true;
 	}
 }
 
@@ -517,18 +563,18 @@ void ble_init(void)
 
 	/* 2. Add the Service to the BLE Stack */
 	/* Max attributes = 7 (1 for service + 2 for each char + 2 for CCCD descriptors) */
-	aci_gatt_add_serv(UUID_TYPE_128, cli_serv_uuid, PRIMARY_SERVICE, 7, &cli_serv_handle);
+	aci_gatt_add_serv(UUID_TYPE_128, cli_serv_uuid, PRIMARY_SERVICE, 7, &cli_ble_handles.service);
 
 	/* 3. Add RX Characteristic (WRITE property, Max 20 bytes) */
 	/* GATT_NOTIFY_ATTRIBUTE_WRITE tells the stack to fire an event when the PC writes to this! */
-	aci_gatt_add_char(cli_serv_handle, UUID_TYPE_128, cli_rx_uuid, 20,
+	aci_gatt_add_char(cli_ble_handles.service, UUID_TYPE_128, cli_rx_uuid, 20,
 	CHAR_PROP_WRITE | CHAR_PROP_WRITE_WITHOUT_RESP,
-	ATTR_PERMISSION_NONE, GATT_NOTIFY_ATTRIBUTE_WRITE, 16, 1, &cli_rx_char_handle);
+	ATTR_PERMISSION_NONE, GATT_NOTIFY_ATTRIBUTE_WRITE, 16, 1, &cli_ble_handles.rx_char);
 
 	/* 4. Add TX Characteristic (NOTIFY property, Max 20 bytes) */
-	aci_gatt_add_char(cli_serv_handle, UUID_TYPE_128, cli_tx_uuid, 20,
+	aci_gatt_add_char(cli_ble_handles.service, UUID_TYPE_128, cli_tx_uuid, 20,
 	CHAR_PROP_NOTIFY,
-	ATTR_PERMISSION_NONE, 0, 16, 1, &cli_tx_char_handle);
+	ATTR_PERMISSION_NONE, 0, 16, 1, &cli_ble_handles.tx_char);
 
 	if (getBlueNRGVersion(&hwVersion, &fwVersion) == BLE_UTIL_SUCCESS)
 	{
@@ -537,7 +583,7 @@ void ble_init(void)
 				ble_mac_addr[2], ble_mac_addr[1], ble_mac_addr[0]);
 		cli.println(msg);
 
-		ble_initialized = 1;
+		ble_initialized = true;
 	}
 	else
 	{
@@ -569,7 +615,7 @@ void HCI_Event_CB(void *pckt)
 		sprintf(msg, "BLE Disconnected! Reason: 0x%02X\r\n", evt->reason);
 		cli.println(msg);
 
-		ble_connection_flag = 0;
+		ble_active_conn_handle = 0;
 		cli.println("Restarting BLE Advertising...\r\n");
 
 		/* Restart the beacon */
@@ -587,10 +633,10 @@ void HCI_Event_CB(void *pckt)
 		if (evt->subevent == EVT_LE_CONN_COMPLETE)
 		{
 			evt_le_connection_complete *cc = (void*) evt->data;
-			ble_connection_flag = cc->handle;
+			ble_active_conn_handle = cc->handle;
 
 			char msg[64];
-			sprintf(msg, "BLE Connected! Handle: 0x%04X\r\n", ble_connection_flag);
+			sprintf(msg, "BLE Connected! Handle: 0x%04X\r\n", ble_active_conn_handle);
 			cli.println(msg);
 		}
 	}
@@ -607,7 +653,7 @@ void HCI_Event_CB(void *pckt)
 		{
 			evt_gatt_attr_modified_IDB05A1 *evt = (evt_gatt_attr_modified_IDB05A1*) blue_evt->data;
 
-			if (evt->attr_handle == (cli_rx_char_handle + 1))
+			if (evt->attr_handle == (cli_ble_handles.rx_char + 1))
 			{
 				/* Process each received byte */
 				if (current_cli_port == CLI_PORT_BLE)
@@ -689,6 +735,8 @@ int main(void)
 
 	HAL_TIM_PWM_Start(&htim4, GRN_LED);
 
+	HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
+
 	ble_init();
 
 	/* USER CODE END 2 */
@@ -701,16 +749,17 @@ int main(void)
 		HAL_IWDG_Refresh(&hiwdg);
 		cli_process(&cli);	//periodically call to process incoming characters
 
-		if (ble_initialized == 1)
+		if (ble_initialized == true)
 		{
-			hci_user_evt_proc();
+			hci_user_evt_proc(); //process BLE events periodically
 		}
 
-		if (cdc_connection_open_flag == 1)
+		/* Determines which port is active and requires CLI access  */
+		if (CDC_Connection_Open_Flag == true && current_system_mode == MODE_CLI)
 		{
 			target_cli_port = CLI_PORT_USB;
 		}
-		else if (ble_connection_flag != 0)
+		else if (ble_active_conn_handle != 0)
 		{
 			target_cli_port = CLI_PORT_BLE;
 		}
@@ -719,6 +768,7 @@ int main(void)
 			target_cli_port = CLI_PORT_UART;
 		}
 
+		/* Redirects CLI to the correct port if it has changed */
 		if (current_cli_port != target_cli_port)
 		{
 
@@ -759,13 +809,13 @@ int main(void)
 			}
 		}
 
-		if (button_pushed == 1)
+		if (button_pushed_flag == true)
 		{
-			read_temp();
-			button_pushed = 0;
+			/* Placeholder for User Button action (BLE Pairing etc) */
+			button_pushed_flag = false;
 		}
 
-		if (can_rx_flag)
+		if (can_rx_flag == true)
 		{
 			FDCAN_RxHeaderTypeDef RxHeader;
 			uint8_t RxData[8];
@@ -773,21 +823,32 @@ int main(void)
 
 			if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
 			{
-				int len = sprintf(msg, "RX ID: 0x%03lX [%ld] Data: ", RxHeader.Identifier, RxHeader.DataLength >> 16);
+				uint8_t dlc_len = (RxHeader.DataLength >> 16) ? (RxHeader.DataLength >> 16) : RxHeader.DataLength;
+				dlc_len &= 0x0F;
 
-				for (int i = 0; i < 8; i++)
+				if (current_system_mode == MODE_SLCAN)
 				{
-					len += sprintf(msg + len, "%02X ", RxData[i]);
+					slcan_format_rx_frame(RxHeader.Identifier, RxData, dlc_len);
+
 				}
-				strcat(msg, "\r\n");
-				cli.println(msg);
+				else
+				{
+					int len = sprintf(msg, "RX ID: 0x%03lX [%d] Data: ", RxHeader.Identifier, dlc_len);
+					for (int i = 0; i < dlc_len; i++)
+					{
+						len += sprintf(msg + len, "%02X ", RxData[i]);
+					}
+					strcat(msg, "\r\n");
+					cli.println(msg);
+				}
+
 			}
 			else
 			{
 				cli.println("RX Message Error\r\n");
 			}
 
-			can_rx_flag = 0;
+			can_rx_flag = false;
 		}
 		/* USER CODE END WHILE */
 

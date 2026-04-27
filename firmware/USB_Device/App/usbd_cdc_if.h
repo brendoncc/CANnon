@@ -29,7 +29,7 @@
 
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_cdc.h"
-
+#include "main.h"
 /* USER CODE BEGIN INCLUDE */
 
 /* USER CODE END INCLUDE */
@@ -94,7 +94,7 @@
 extern USBD_CDC_ItfTypeDef USBD_Interface_fops_FS;
 
 /* USER CODE BEGIN EXPORTED_VARIABLES */
-extern volatile uint8_t CDC_Connection_Open_Flag;
+extern volatile bool CDC_Connection_Open_Flag;
 /* USER CODE END EXPORTED_VARIABLES */
 
 /**

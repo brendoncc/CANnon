@@ -41,7 +41,7 @@ static volatile uint8_t *buf_ptr; /* Pointer to Rx byte-buffer */
 static uint8_t cmd_buf[MAX_BUF_SIZE]; /* CLI command buffer */
 static volatile uint8_t cmd_pending;
 
-const char cli_init_message[] = "CANnon Initialized \r\n";
+const char cli_init_message[] = "CANnon CLI Initialized \r\n";
 const char cli_prompt[] = "\x1b[31mHAL9000: \x1b[0m"; /* CLI prompt displayed to the user */
 const char cli_unrecog[] = "I'm sorry Dave, I'm afraid I can't do that.\r\n";
 
