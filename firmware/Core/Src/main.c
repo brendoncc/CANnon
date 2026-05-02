@@ -85,7 +85,7 @@ static volatile bool button_pushed_flag = false;
 
 /* CLI Interface Variables */
 static uint8_t uart_rx_byte;
-usb_mode_t current_usb_mode = MODE_CLI;
+usb_mode_t current_usb_mode = MODE_SLCAN;
 
 /* CAN Variables */
 static volatile bool can_rx_flag = false;
@@ -300,8 +300,6 @@ cli_status_t ble_func(int argc, char **argv)
 		}
 		else if (strcmp(argv[1], "init") == 0)
 		{
-
-			cli.println("Initializing BLE...\r\n");
 			ble_init();
 		}
 		else
@@ -498,6 +496,8 @@ HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len)
 
 void ble_init(void)
 {
+	cli.println("Initializing BLE...\r\n");
+
 	// Extract the STM32's unique factory silicon ID
 	uint32_t uid_word0 = *(uint32_t*) (UID_BASE);
 	uint32_t uid_word1 = *(uint32_t*) (UID_BASE + 0x04);
@@ -714,15 +714,16 @@ int main(void)
 
 	HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1);
 
-	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
-
-	HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
-	can_set_mode(FDCAN_MODE_BUS_MONITORING);
-
 	cli.println = cli_println;	//define function used for cli.println
 	cli.cmd_tbl = cmd_tbl;			//define name of array used for cmd_tbl
 	cli.cmd_cnt = sizeof(cmd_tbl) / sizeof(cmd_t);	//define number of commands
 	cli_init(&cli);
+
+	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
+	read_temp();
+
+	HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
+	cli.println("CAN power on \r\n");
 
 	ble_init();
 
