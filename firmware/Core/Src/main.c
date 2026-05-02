@@ -85,7 +85,7 @@ static volatile bool button_pushed_flag = false;
 
 /* CLI Interface Variables */
 static uint8_t uart_rx_byte;
-system_mode_t current_system_mode = MODE_CLI;
+usb_mode_t current_usb_mode = MODE_CLI;
 
 /* CAN Variables */
 static volatile bool can_rx_flag = false;
@@ -123,15 +123,14 @@ void cli_println(char *string);
 void read_temp(void);
 void ble_init(void);
 void HCI_Event_CB(void *pckt);
+void update_status_leds(void);
 
 HAL_StatusTypeDef can_set_mode(uint32_t mode);
 HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len);
 
 cli_status_t help_func(int argc, char **argv);
-cli_status_t can_pwr_func(int argc, char **argv);
+cli_status_t can_func(int argc, char **argv);
 cli_status_t temp_func(int argc, char **argv);
-cli_status_t can_test_func(int argc, char **argv);
-cli_status_t can_monitor_func(int argc, char **argv);
 cli_status_t slcan_func(int argc, char **argv);
 cli_status_t ble_func(int argc, char **argv);
 
@@ -148,10 +147,8 @@ cli_t cli;	//creates instance of the CLI function
 cmd_t cmd_tbl[7] =
 {
 { .cmd = "help", .func = help_func },
-{ .cmd = "can_power", .func = can_pwr_func },
+{ .cmd = "can", .func = can_func },
 { .cmd = "temp", .func = temp_func },
-{ .cmd = "can_test", .func = can_test_func },
-{ .cmd = "can_monitor", .func = can_monitor_func },
 { .cmd = "slcan", .func = slcan_func },
 { .cmd = "ble", .func = ble_func } };
 
@@ -159,84 +156,67 @@ cli_status_t help_func(int argc, char **argv)
 {
 	cli.println("-- HAL CLI Commands -- \r\n");
 	cli.println("help \r\n");
-	cli.println("can_power 	[ 1 | 0 | -help ] \r\n");
-	cli.println("can_test 	[ -start | -help ] \r\n");
-	cli.println("can_monitor 	[ -start | -help ] \r\n");
-	cli.println("slcan 	[ -start | -help ] \r\n");
-	cli.println("temp 		[ -read | -help ] \r\n");
-	cli.println("ble 		[ -init | -help ] \r\n");
+	cli.println("can 		[ power on | power off | test | monitor | help ] \r\n");
+	cli.println("slcan 		[ start | help ] \r\n");
+	cli.println("temp 		[ read | help ] \r\n");
+	cli.println("ble 		[ init | help ] \r\n");
 	return CLI_OK;
 }
 
-cli_status_t can_pwr_func(int argc, char **argv)
+cli_status_t can_func(int argc, char **argv)
 {
 	if (argc > 0)
 	{
-		if (strcmp(argv[1], "-help") == 0)
+		if (strcmp(argv[1], "help") == 0)
 		{
 			cli.println("-- CAN Power help menu --\r\n");
-			cli.println("can_power 1	//Enable CAN isolated PSU \r\n");
-			cli.println("can_power 0	//Disabled CAN isolated PSU \r\n");
-		}
-		else if (strcmp(argv[1], "1") == 0)
-		{
-			cli.println("CAN power on \r\n");
-			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
-		}
-		else if (strcmp(argv[1], "0") == 0)
-		{
-			cli.println("CAN power off \r\n");
-			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_RESET);
-		}
-		else
-		{
-			cli.println("can_power invalid argument \r\n");
-			return CLI_E_INVALID_ARGS;
-		}
-	}
-	return CLI_OK;
-}
-
-cli_status_t temp_func(int argc, char **argv)
-{
-	if (argc > 0)
-	{
-		if (strcmp(argv[1], "-help") == 0)
-		{
-			cli.println("-- Temperature Sensor help menu --\r\n");
-			cli.println("temp -read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
-		}
-		else if (strcmp(argv[1], "-read") == 0)
-		{
-			read_temp();
-		}
-		else
-		{
-			cli.println("temp invalid argument \r\n");
-			return CLI_E_INVALID_ARGS;
-		}
-	}
-	return CLI_OK;
-}
-
-cli_status_t can_test_func(int argc, char **argv)
-{
-	if (argc > 0)
-	{
-		if (strcmp(argv[1], "-help") == 0)
-		{
-			cli.println("-- CAN Test help menu --\r\n");
-			cli.println("can_test -start	//Start external CAN loopback test \r\n");
+			cli.println("can power on	//Enable CAN isolated PSU \r\n");
+			cli.println("can power off	//Disabled CAN isolated PSU \r\n");
+			cli.println("can monitor 	//Start continuous CAN monitoring \r\n");
+			cli.println("can test		//Start external CAN loopback test \r\n");
 			cli.println("		//DISCONNECT FROM BUS BEFORE RUNNING \r\n");
 		}
-		else if (strcmp(argv[1], "-start") == 0)
+		else if (strcmp(argv[1], "power") == 0)
+		{
+			if (strcmp(argv[2], "on") == 0)
+			{
+				cli.println("CAN power on \r\n");
+				HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
+			}
+			else if (strcmp(argv[2], "off") == 0)
+			{
+				cli.println("CAN power off \r\n");
+				HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_RESET);
+			}
+			else
+			{
+				cli.println("can power invalid argument \r\n");
+				return CLI_E_INVALID_ARGS;
+			}
+		}
+		else if (strcmp(argv[1], "monitor") == 0)
+		{
+			if (HAL_GPIO_ReadPin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin) == GPIO_PIN_RESET)
+			{
+				cli.println("Error: CAN Power is OFF. Run 'can power on' first.\r\n");
+				return CLI_E_IO;
+			}
+
+			cli.println("Entering Bus Monitor Mode (Listen Only)...\r\n");
+
+			if (can_set_mode(FDCAN_MODE_BUS_MONITORING) != HAL_OK)
+			{
+				return CLI_E_IO;
+			}
+		}
+		else if (strcmp(argv[1], "test") == 0)
 		{
 			uint8_t testData[] =
 			{ 0xF0, 0xE1, 0xD2, 0xC3, 0xB4, 0xA5, 0x86, 0x77 };
 
 			if (HAL_GPIO_ReadPin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin) == GPIO_PIN_RESET)
 			{
-				cli.println("Error: CAN Power is OFF. Run 'can_power 1' first.\r\n");
+				cli.println("Error: CAN Power is OFF. Run 'can power on' first.\r\n");
 				return CLI_E_IO;
 			}
 
@@ -254,42 +234,29 @@ cli_status_t can_test_func(int argc, char **argv)
 		}
 		else
 		{
-			cli.println("can_test invalid argument \r\n");
+			cli.println("can invalid argument \r\n");
 			return CLI_E_INVALID_ARGS;
 		}
 	}
-
 	return CLI_OK;
 }
 
-cli_status_t can_monitor_func(int argc, char **argv)
+cli_status_t temp_func(int argc, char **argv)
 {
-
 	if (argc > 0)
 	{
-		if (strcmp(argv[1], "-help") == 0)
+		if (strcmp(argv[1], "help") == 0)
 		{
-			cli.println("-- CAN Monitor help menu --\r\n");
-			cli.println("can_monitor -start	//Start continuous CAN monitoring \r\n");
+			cli.println("-- Temperature Sensor help menu --\r\n");
+			cli.println("temp read	//Print Temperature (C) and Humidity (%) on CLI \r\n");
 		}
-		else if (strcmp(argv[1], "-start") == 0)
+		else if (strcmp(argv[1], "read") == 0)
 		{
-			if (HAL_GPIO_ReadPin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin) == GPIO_PIN_RESET)
-			{
-				cli.println("Error: CAN Power is OFF. Run 'can_power 1' first.\r\n");
-				return CLI_E_IO;
-			}
-
-			cli.println("Entering Bus Monitor Mode (Listen Only)...\r\n");
-
-			if (can_set_mode(FDCAN_MODE_BUS_MONITORING) != HAL_OK)
-			{
-				return CLI_E_IO;
-			}
+			read_temp();
 		}
 		else
 		{
-			cli.println("can_monitor invalid argument \r\n");
+			cli.println("temp invalid argument \r\n");
 			return CLI_E_INVALID_ARGS;
 		}
 	}
@@ -300,17 +267,17 @@ cli_status_t slcan_func(int argc, char **argv)
 {
 	if (argc > 0)
 	{
-		if (strcmp(argv[1], "-help") == 0)
+		if (strcmp(argv[1], "help") == 0)
 		{
 			cli.println("-- slcan help menu --\r\n");
-			cli.println("slcan -start	//Change USB mode to slcan for CAN to USB bridge \r\n");
+			cli.println("slcan start	//Change USB mode to slcan for CAN to USB bridge \r\n");
 		}
-		else if (strcmp(argv[1], "-start") == 0)
+		else if (strcmp(argv[1], "start") == 0)
 		{
 			cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
-			cli.println("Reset board to exit.\r\n");
+			cli.println("Press USR BTN to switch back to CLI\r\n");
 			HAL_Delay(50); // Let the message flush over USB
-			current_system_mode = MODE_SLCAN;
+			current_usb_mode = MODE_SLCAN;
 		}
 		else
 		{
@@ -326,12 +293,12 @@ cli_status_t ble_func(int argc, char **argv)
 
 	if (argc > 0)
 	{
-		if (strcmp(argv[1], "-help") == 0)
+		if (strcmp(argv[1], "help") == 0)
 		{
 			cli.println("-- BLE help menu --\r\n");
-			cli.println("ble -init	//Initialize BLUE-NRG-M0L Module \r\n");
+			cli.println("ble init	//Initialize BLUE-NRG-M0L Module \r\n");
 		}
-		else if (strcmp(argv[1], "-init") == 0)
+		else if (strcmp(argv[1], "init") == 0)
 		{
 
 			cli.println("Initializing BLE...\r\n");
@@ -348,7 +315,7 @@ cli_status_t ble_func(int argc, char **argv)
 
 void cli_println(char *string)
 {
-	if (current_cli_port == CLI_PORT_USB && current_system_mode == MODE_CLI)
+	if (current_cli_port == CLI_PORT_USB && current_usb_mode == MODE_CLI)
 	{
 		CDC_Transmit_FS((uint8_t*) string, strlen(string)); //transmit CLI messages on USB CDC interface
 	}
@@ -440,6 +407,26 @@ void breathe_LED(void)
 	__HAL_TIM_SET_COMPARE(&htim4, GRN_LED, led_duty);
 	__HAL_TIM_SET_COMPARE(&htim4, RED_LED, led_duty);
 	__HAL_TIM_SET_COMPARE(&htim4, BLU_LED, led_duty);
+}
+
+void update_status_leds(void)
+{
+	HAL_TIM_PWM_Stop(&htim4, RED_LED);
+	HAL_TIM_PWM_Stop(&htim4, GRN_LED);
+	HAL_TIM_PWM_Stop(&htim4, BLU_LED);
+
+	if (current_cli_port == CLI_PORT_USB)
+	{
+		HAL_TIM_PWM_Start(&htim4, RED_LED);
+	}
+	else if (current_cli_port == CLI_PORT_BLE)
+	{
+		HAL_TIM_PWM_Start(&htim4, BLU_LED);
+	}
+	else
+	{
+		HAL_TIM_PWM_Start(&htim4, GRN_LED);
+	}
 }
 
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
@@ -726,18 +713,20 @@ int main(void)
 	/* USER CODE BEGIN 2 */
 
 	HAL_UART_Receive_IT(&huart4, &uart_rx_byte, 1);
+
 	HDC2021_Init(&hi2c2, HDC2021_RESOLUTION_14BIT, HDC2021_RESOLUTION_14BIT, HDC2021_RATE_OFF);
+
+	HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
+	can_set_mode(FDCAN_MODE_BUS_MONITORING);
 
 	cli.println = cli_println;	//define function used for cli.println
 	cli.cmd_tbl = cmd_tbl;			//define name of array used for cmd_tbl
 	cli.cmd_cnt = sizeof(cmd_tbl) / sizeof(cmd_t);	//define number of commands
 	cli_init(&cli);
 
-	HAL_TIM_PWM_Start(&htim4, GRN_LED);
-
-	HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
-
 	ble_init();
+
+	update_status_leds();
 
 	/* USER CODE END 2 */
 
@@ -755,7 +744,7 @@ int main(void)
 		}
 
 		/* Determines which port is active and requires CLI access  */
-		if (CDC_Connection_Open_Flag == true && current_system_mode == MODE_CLI)
+		if (CDC_Connection_Open_Flag == true && current_usb_mode == MODE_CLI)
 		{
 			target_cli_port = CLI_PORT_USB;
 		}
@@ -786,32 +775,24 @@ int main(void)
 			}
 
 			current_cli_port = target_cli_port;
-
 			cli_init(&cli);
-
-			if (target_cli_port == CLI_PORT_USB)
-			{
-				HAL_TIM_PWM_Start(&htim4, RED_LED);
-				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
-				HAL_TIM_PWM_Stop(&htim4, BLU_LED);
-			}
-			else if (target_cli_port == CLI_PORT_BLE)
-			{
-				HAL_TIM_PWM_Stop(&htim4, RED_LED);
-				HAL_TIM_PWM_Stop(&htim4, GRN_LED);
-				HAL_TIM_PWM_Start(&htim4, BLU_LED);
-			}
-			else
-			{
-				HAL_TIM_PWM_Stop(&htim4, RED_LED);
-				HAL_TIM_PWM_Start(&htim4, GRN_LED);
-				HAL_TIM_PWM_Stop(&htim4, BLU_LED);
-			}
+			update_status_leds();
 		}
 
 		if (button_pushed_flag == true)
 		{
-			/* Placeholder for User Button action (BLE Pairing etc) */
+			/* Changes USB mode between CLI and SLCAN */
+			if(current_usb_mode == MODE_CLI)
+			{
+				cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
+				cli.println("Press USR BTN to switch back to CLI\r\n");
+				HAL_Delay(50); // Let the message flush over USB
+				current_usb_mode = MODE_SLCAN;
+			}
+			else
+			{
+				current_usb_mode = MODE_CLI;
+			}
 			button_pushed_flag = false;
 		}
 
@@ -826,7 +807,7 @@ int main(void)
 				uint8_t dlc_len = (RxHeader.DataLength >> 16) ? (RxHeader.DataLength >> 16) : RxHeader.DataLength;
 				dlc_len &= 0x0F;
 
-				if (current_system_mode == MODE_SLCAN)
+				if (current_usb_mode == MODE_SLCAN)
 				{
 					slcan_format_rx_frame(RxHeader.Identifier, RxData, dlc_len);
 
@@ -925,7 +906,7 @@ static void MX_FDCAN1_Init(void)
 	hfdcan1.Init.NominalPrescaler = 2;
 	hfdcan1.Init.NominalSyncJumpWidth = 1;
 	hfdcan1.Init.NominalTimeSeg1 = 13;
-	hfdcan1.Init.NominalTimeSeg2 = 1;
+	hfdcan1.Init.NominalTimeSeg2 = 2;
 	hfdcan1.Init.DataPrescaler = 1;
 	hfdcan1.Init.DataSyncJumpWidth = 1;
 	hfdcan1.Init.DataTimeSeg1 = 1;

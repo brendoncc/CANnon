@@ -83,9 +83,9 @@ extern "C" {
 typedef enum {
     MODE_CLI,      // Human interactive mode (Default)
     MODE_SLCAN     // Machine-to-Machine bridge mode
-} system_mode_t;
+} usb_mode_t;
 
-extern system_mode_t current_system_mode;
+extern usb_mode_t current_usb_mode;
 
 typedef enum
 {

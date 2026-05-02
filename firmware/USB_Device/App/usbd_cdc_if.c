@@ -32,7 +32,7 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 volatile bool CDC_Connection_Open_Flag = false;
-extern system_mode_t current_system_mode;
+extern usb_mode_t current_usb_mode;
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -267,7 +267,7 @@ static int8_t CDC_Control_FS(uint8_t cmd, uint8_t *pbuf, uint16_t length)
 static int8_t CDC_Receive_FS(uint8_t *Buf, uint32_t *Len)
 {
 	/* USER CODE BEGIN 6 */
-	if (current_system_mode == MODE_SLCAN)
+	if (current_usb_mode == MODE_SLCAN)
 	{
 		/* The USB port is a dedicated CAN bridge. Process everything silently. */
 		for (uint32_t i = 0; i < *Len; i++)
@@ -275,7 +275,7 @@ static int8_t CDC_Receive_FS(uint8_t *Buf, uint32_t *Len)
 			slcan_rx(Buf[i]);
 		}
 	}
-	else if (current_system_mode == MODE_CLI)
+	else if (current_usb_mode == MODE_CLI)
 	{
 		if (current_cli_port == CLI_PORT_USB)
 		{
