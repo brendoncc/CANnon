@@ -276,7 +276,7 @@ cli_status_t slcan_func(int argc, char **argv)
 		{
 			cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
 			cli.println("Press USR BTN to switch back to CLI\r\n");
-			HAL_Delay(50); // Let the message flush over USB
+			HAL_Delay(5); // Let the message flush over USB
 			current_usb_mode = MODE_SLCAN;
 		}
 		else
@@ -349,13 +349,13 @@ void cli_println(char *string)
 			}
 		}
 
-		HAL_Delay(10);
+		HAL_Delay(5);
 	}
 	else
 	{
 		HAL_UART_Transmit(&huart4, (uint8_t*) string, strlen(string), HAL_MAX_DELAY); //transmit CLI messages on UART interface
 	}
-	HAL_Delay(1);
+	//HAL_Delay(1);
 }
 
 void cli_rx(char c)
@@ -782,11 +782,11 @@ int main(void)
 		if (button_pushed_flag == true)
 		{
 			/* Changes USB mode between CLI and SLCAN */
-			if(current_usb_mode == MODE_CLI)
+			if (current_usb_mode == MODE_CLI)
 			{
 				cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
 				cli.println("Press USR BTN to switch back to CLI\r\n");
-				HAL_Delay(50); // Let the message flush over USB
+				HAL_Delay(5); // Let the message flush over USB
 				current_usb_mode = MODE_SLCAN;
 			}
 			else
@@ -798,38 +798,41 @@ int main(void)
 
 		if (can_rx_flag == true)
 		{
+			can_rx_flag = false;
+
 			FDCAN_RxHeaderTypeDef RxHeader;
 			uint8_t RxData[8];
 			char msg[128];
 
-			if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
+			while (HAL_FDCAN_GetRxFifoFillLevel(&hfdcan1, FDCAN_RX_FIFO0) > 0)
 			{
-				uint8_t dlc_len = (RxHeader.DataLength >> 16) ? (RxHeader.DataLength >> 16) : RxHeader.DataLength;
-				dlc_len &= 0x0F;
-
-				if (current_usb_mode == MODE_SLCAN)
+				if (HAL_FDCAN_GetRxMessage(&hfdcan1, FDCAN_RX_FIFO0, &RxHeader, RxData) == HAL_OK)
 				{
-					slcan_format_rx_frame(RxHeader.Identifier, RxData, dlc_len);
+					uint8_t dlc_len = (RxHeader.DataLength >> 16) ? (RxHeader.DataLength >> 16) : RxHeader.DataLength;
+					dlc_len &= 0x0F;
+
+					if (current_usb_mode == MODE_SLCAN)
+					{
+						slcan_format_rx_frame(RxHeader.Identifier, RxData, dlc_len);
+
+					}
+					else
+					{
+						int len = sprintf(msg, "RX ID: 0x%03lX [%d] Data: ", RxHeader.Identifier, dlc_len);
+						for (int i = 0; i < dlc_len; i++)
+						{
+							len += sprintf(msg + len, "%02X ", RxData[i]);
+						}
+						strcat(msg, "\r\n");
+						cli.println(msg);
+					}
 
 				}
 				else
 				{
-					int len = sprintf(msg, "RX ID: 0x%03lX [%d] Data: ", RxHeader.Identifier, dlc_len);
-					for (int i = 0; i < dlc_len; i++)
-					{
-						len += sprintf(msg + len, "%02X ", RxData[i]);
-					}
-					strcat(msg, "\r\n");
-					cli.println(msg);
+					cli.println("RX Message Error\r\n");
 				}
-
 			}
-			else
-			{
-				cli.println("RX Message Error\r\n");
-			}
-
-			can_rx_flag = false;
 		}
 		/* USER CODE END WHILE */
 
