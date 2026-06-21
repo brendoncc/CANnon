@@ -14,6 +14,7 @@
 /* --- External Dependencies from main.c --- */
 extern HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len);
 extern HAL_StatusTypeDef can_set_mode(uint32_t mode);
+extern HAL_StatusTypeDef can_set_baudrate(uint8_t speed_code);
 
 /* --- Private Defines --- */
 #define SLCAN_BUF_SIZE 32
@@ -78,12 +79,23 @@ static void slcan_process_command(const char *cmd)
 		/* 'S': Set Baudrate (S0 to S8)                     */
 		/* ------------------------------------------------ */
 	case 'S':
-		/* STM32CubeMX FDCAN clock generation is statically compiled.
-		 We simply acknowledge the PC software's baudrate request
-		 so it doesn't crash, but rely on our hardcoded FDCAN timings. */
-		slcan_transmit(SLCAN_ACK);
+		if (rx_idx == 2) // Ensure the command is exactly 2 characters (e.g. 'S' and '6')
+		{
+			uint8_t speed_code = rx_buf[1] - '0'; // Convert ASCII number to integer
+			if (can_set_baudrate(speed_code) == HAL_OK)
+			{
+				slcan_transmit(SLCAN_ACK);
+			}
+			else
+			{
+				slcan_transmit(SLCAN_NACK);
+			}
+		}
+		else
+		{
+			slcan_transmit(SLCAN_NACK);
+		}
 		break;
-
 		/* ------------------------------------------------ */
 		/* 't': Transmit Standard Frame (tIIILDD...)        */
 		/* ------------------------------------------------ */

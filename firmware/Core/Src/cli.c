@@ -42,8 +42,8 @@ static uint8_t cmd_buf[MAX_BUF_SIZE]; /* CLI command buffer */
 static volatile uint8_t cmd_pending;
 
 const char cli_init_message[] = "CANnon CLI Initialized \r\n";
-const char cli_prompt[] = "\x1b[31mHAL9000: \x1b[0m"; /* CLI prompt displayed to the user */
-const char cli_unrecog[] = "I'm sorry Dave, I'm afraid I can't do that.\r\n";
+const char cli_prompt[] = "\x1b[31mCANnon: \x1b[0m"; /* CLI prompt displayed to the user */
+const char cli_unrecog[] = "Error: Invalid Command\r\n";
 
 /*!
  * @brief This internal API prints a message to the user on the CLI.

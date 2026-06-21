@@ -90,6 +90,29 @@ usb_mode_t current_usb_mode = MODE_CLI;
 /* CAN Variables */
 static volatile bool can_rx_flag = false;
 
+/* Structure to hold hardware-specific CAN timings */
+typedef struct
+{
+	uint32_t prescaler;
+	uint32_t time_seg1;
+	uint32_t time_seg2;
+	uint32_t sync_jump_width;
+} can_timings_t;
+
+/* Timing table for 16MHz FDCAN Clock */
+static const can_timings_t baud_table[9] =
+{
+{ 100, 13, 2, 1 }, // S0: 10 kbps
+		{ 50, 13, 2, 1 }, // S1: 20 kbps
+		{ 20, 13, 2, 1 }, // S2: 50 kbps
+		{ 10, 13, 2, 1 }, // S3: 100 kbps
+		{ 8, 13, 2, 1 }, // S4: 125 kbps
+		{ 4, 13, 2, 1 }, // S5: 250 kbps
+		{ 2, 13, 2, 1 }, // S6: 500 kbps
+		{ 1, 15, 4, 1 }, // S7: 800 kbps  (Needs 20 tq: 1+15+4=20. 16M/20 = 800k)
+		{ 1, 13, 2, 1 }  // S8: 1000 kbps
+};
+
 /* BLE Variables */
 static uint16_t ble_active_conn_handle = 0;
 static uint8_t ble_local_name[13]; // Array to hold: [AD_TYPE][C][A][N][n][o][n][-][X][X][X][X]
@@ -186,12 +209,12 @@ cli_status_t can_func(int argc, char **argv)
 	{
 		if (strcmp(argv[2], "on") == 0)
 		{
-			cli.println("CAN power on \r\n");
+			cli.println("Info: CAN power on \r\n");
 			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
 		}
 		else if (strcmp(argv[2], "off") == 0)
 		{
-			cli.println("CAN power off \r\n");
+			cli.println("Info: CAN power off \r\n");
 			HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_RESET);
 		}
 		else
@@ -214,7 +237,7 @@ cli_status_t can_func(int argc, char **argv)
 			return CLI_E_IO;
 		}
 
-		cli.println("Entering Bus Monitor Mode (Listen Only)...\r\n");
+		cli.println("Info: Entering Bus Monitor Mode (Listen Only)...\r\n");
 
 		if (can_set_mode(FDCAN_MODE_BUS_MONITORING) != HAL_OK)
 		{
@@ -248,7 +271,7 @@ cli_status_t can_func(int argc, char **argv)
 			cli.println("Error: CAN TX Failed\r\n");
 			return CLI_E_IO;
 		}
-		cli.println("External CAN Loopback Frame Sent (ID 0x123)\r\n");
+		cli.println("Info: External CAN Loopback Frame Sent (ID 0x123)\r\n");
 	}
 	else
 	{
@@ -304,15 +327,15 @@ cli_status_t usb_mode_func(int argc, char **argv)
 	}
 	else if (strcmp(argv[1], "slcan") == 0)
 	{
-		cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
-		cli.println("Run 'usb_mode cli' or press USR BTN to switch back to CLI\r\n");
+		cli.println("Info: Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
+		cli.println("	Run 'usb_mode cli' or press USR BTN to switch back to CLI\r\n");
 		HAL_Delay(5); // Let the message flush over USB
 		current_usb_mode = MODE_SLCAN;
 	}
 	else if (strcmp(argv[1], "cli") == 0)
 	{
-		cli.println("Exiting SLCAN Bridge Mode. Enabling CLI.\r\n");
-		cli.println("Run 'usb_mode slcan' or press USR BTN to switch back to SLCAN mode\r\n");
+		cli.println("Info: Exiting SLCAN Bridge Mode. Enabling CLI.\r\n");
+		cli.println("	Run 'usb_mode slcan' or press USR BTN to switch back to SLCAN mode\r\n");
 		HAL_Delay(5); // Let the message flush over USB
 		current_usb_mode = MODE_CLI;
 	}
@@ -344,7 +367,7 @@ cli_status_t ble_func(int argc, char **argv)
 	}
 	else
 	{
-		cli.println("BLE invalid argument \r\n");
+		cli.println("Error: BLE invalid argument \r\n");
 		return CLI_E_INVALID_ARGS;
 	}
 
@@ -517,6 +540,29 @@ HAL_StatusTypeDef can_set_mode(uint32_t mode)
 	return HAL_OK;
 }
 
+HAL_StatusTypeDef can_set_baudrate(uint8_t speed_code)
+{
+	if (speed_code > 8)
+	{
+		return HAL_ERROR;
+	}
+
+	HAL_FDCAN_Stop(&hfdcan1);
+	hfdcan1.State = HAL_FDCAN_STATE_RESET;
+
+	hfdcan1.Init.NominalPrescaler = baud_table[speed_code].prescaler;
+	hfdcan1.Init.NominalTimeSeg1 = baud_table[speed_code].time_seg1;
+	hfdcan1.Init.NominalTimeSeg2 = baud_table[speed_code].time_seg2;
+	hfdcan1.Init.NominalSyncJumpWidth = baud_table[speed_code].sync_jump_width;
+
+	if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK)
+	{
+		return HAL_ERROR;
+	}
+
+	return HAL_OK;
+}
+
 HAL_StatusTypeDef can_send(uint32_t id, uint8_t *data, uint32_t len)
 {
 	FDCAN_TxHeaderTypeDef TxHeader;
@@ -615,7 +661,7 @@ void ble_init(void)
 	}
 	else
 	{
-		cli.println("BLE Init Failed.\r\n");
+		cli.println("Error: BLE Init Failed.\r\n");
 	}
 }
 
@@ -640,7 +686,7 @@ void HCI_Event_CB(void *pckt)
 		evt_disconn_complete *evt = (void*) event_pckt->data;
 
 		char msg[64];
-		sprintf(msg, "BLE Disconnected! Reason: 0x%02X\r\n", evt->reason);
+		sprintf(msg, "Info: BLE Disconnected! Reason: 0x%02X\r\n", evt->reason);
 		cli.println(msg);
 
 		ble_active_conn_handle = 0;
@@ -664,7 +710,7 @@ void HCI_Event_CB(void *pckt)
 			ble_active_conn_handle = cc->handle;
 
 			char msg[64];
-			sprintf(msg, "BLE Connected! Handle: 0x%04X\r\n", ble_active_conn_handle);
+			sprintf(msg, "Info: BLE Connected! Handle: 0x%04X\r\n", ble_active_conn_handle);
 			cli.println(msg);
 		}
 	}
@@ -768,7 +814,7 @@ int main(void)
 	read_temp();
 
 	HAL_GPIO_WritePin(CAN_PWR_EN_GPIO_Port, CAN_PWR_EN_Pin, GPIO_PIN_SET);
-	cli.println("CAN power on \r\n");
+	cli.println("Info: CAN power on \r\n");
 
 	ble_init();
 
@@ -821,6 +867,7 @@ int main(void)
 			}
 
 			current_cli_port = target_cli_port;
+			HAL_Delay(5);
 			cli_init(&cli);
 			update_status_leds();
 		}
@@ -831,8 +878,8 @@ int main(void)
 			/* Changes USB mode between CLI and SLCAN */
 			if (current_usb_mode == MODE_CLI)
 			{
-				cli.println("Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
-				cli.println("Press USR BTN to switch back to CLI\r\n");
+				cli.println("Info: Entering SLCAN Bridge Mode. Disabling CLI.\r\n");
+				cli.println("	Press USR BTN to switch back to CLI\r\n");
 				HAL_Delay(5); // Let the message flush over USB
 				current_usb_mode = MODE_SLCAN;
 			}
@@ -869,14 +916,13 @@ int main(void)
 						{
 							len += sprintf(msg + len, "%02X ", RxData[i]);
 						}
-						strcat(msg, "\r\n");
 						cli.println(msg);
 					}
 
 				}
 				else
 				{
-					cli.println("RX Message Error\r\n");
+					cli.println("Error: CAN RX Message Error\r\n");
 				}
 			}
 		}
